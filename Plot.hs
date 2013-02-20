@@ -1,20 +1,20 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {- | Example implementation for displaying signals
 
 -}
 module Plot(
-	  StyledSignal
+      StyledSignal
     , SignalStyle(..) 
     , PlotStyle(..)
+    , AnySignal(..)
     , defaultPlotStyle
     , defaultSignalStyle
     , discreteSignalsWithStyle
     , signalsWithStyle
     , display
-	) where 
-
-import Prelude hiding(zip,head,tail,map,maximum,minimum,repeat)
+    ) where 
 
 import Graphics.PDF
 import Displayable 
@@ -23,24 +23,12 @@ import Text.Printf
 import qualified Graphics.PDF as PDF(Orientation(..))
 import Control.Monad(when) 
 import Data.Maybe(isJust,fromJust)
-import Data.List.Stream
+import Signal
+import Fixed(HasDoubleRepresentation(..))
 
 --import Debug.Trace
 --debug a = trace (show a) a
 
--- | Signals can use values which are not directly doubles (like voltage etc ...)
--- Those values must be convertible into Double for display on a graphic
-class HasDoubleRepresentation a where
-	toDouble :: a -> Double 
-
-instance HasDoubleRepresentation Double where 
-	toDouble = id 
-
-instance HasDoubleRepresentation Float where 
-    toDouble = realToFrac 
-
-instance HasDoubleRepresentation Int where 
-	toDouble = fromIntegral
 
 -- | A list fo signals wth style information for the plot and the signals
 -- The signals are using the same units
@@ -147,13 +135,16 @@ defaultPlotStyle = PlotStyle {
 signalsWithStyle :: [[(a,b)]] -> PlotStyle a b -> StyledSignal a b 
 signalsWithStyle signals style = StyledSignal signals style
 
+data AnySignal = forall b. HasDoubleRepresentation b => AS (Signal b) 
+
 -- | Create a plot description with discrete signals and a plot style
 discreteSignalsWithStyle :: [Double]
-                         -> [[b]] 
-                         -> PlotStyle Double b 
-                         -> StyledSignal Double b 
+                         -> [AnySignal] 
+                         -> PlotStyle Double Double 
+                         -> StyledSignal Double Double 
 discreteSignalsWithStyle theTimes signals style = 
-    let timedSignal s = zip theTimes s
+    let convertSignal (AS s) = map toDouble . toListS $ s
+        timedSignal s = zip theTimes (convertSignal s)
         theCurves = map timedSignal signals
     in 
     signalsWithStyle theCurves style
@@ -161,20 +152,20 @@ discreteSignalsWithStyle theTimes signals style =
 -- | A plot description is Displayable
 instance (Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>  Displayable (StyledSignal a b) where 
     drawing (StyledSignal signals s) = do 
-    	let width = 600.0 
-    	    height = 400.0
+        let width = 600.0 
+            height = 400.0
             tickSize = 6
             tickLabelSep = 5
             hUnitSep = 5
             vUnitSep = 5
             titleSep = 5
-    	    ta = minimum . map (minimum . map (toDouble . fst)) $ signals 
-    	    tb = maximum . map (maximum . map (toDouble . fst)) $ signals 
-    	    ya = minimum . map (minimum . map (toDouble . snd)) $ signals 
-    	    yb = maximum . map (maximum . map (toDouble . snd))$ signals 
+            ta = minimum . map (minimum . map (toDouble . fst)) $ signals 
+            tb = maximum . map (maximum . map (toDouble . fst)) $ signals 
+            ya = minimum . map (minimum . map (toDouble . snd)) $ signals 
+            yb = maximum . map (maximum . map (toDouble . snd))$ signals 
             h a = (toDouble a - ta) / (tb - ta)*(width - leftMargin s - rightMargin s) + leftMargin s 
             v b = (toDouble b - ya) / (yb - ya)*(height - topMargin s - bottomMargin s) + bottomMargin s
-    	    pt (a,b) = (h a) :+ (v b)
+            pt (a,b) = (h a) :+ (v b)
             segmentedDraw h (n:l) = do 
                 let (ha :+ hb) = pt h 
                     (na :+ nb) = pt n 
@@ -246,4 +237,3 @@ instance (Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>
             drawStringLabel titleStyle t (width / 2.0) (height - titleSep) width (topMargin s)
         mapM_ drawSignal (zip signals (signalStyles s))
         (epilog s) pt
-        

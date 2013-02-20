@@ -20,6 +20,9 @@ library
   exposed-modules: 
     Transform
     Plot    
+    Signal 
+    Generators
+    Fixed
   -- other-modules:       
   build-depends:       
      base ==4.6.*,
