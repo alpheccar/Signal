@@ -1,1 +1,1 @@
-ghci Test.hs  -package-conf ../dist/package.conf.inplace
+ghci Test.hs  -XDataKinds -package-conf ../dist/package.conf.inplace

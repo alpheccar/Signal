@@ -26,35 +26,47 @@ duration = 4.0
 theTimes = uniformSamples 0.01 0.0
 
 -- | This signal is working for any type with a Double representation
-genericSignal :: forall a. HasDoubleRepresentation a => Signal a
-genericSignal = mapS (\t -> fromDouble $ sin (2*pi*t)) theTimes
+genericSignal :: forall a. (Fractional a, HasDoubleRepresentation a) => Signal a
+genericSignal = mapS (\t ->  2*(fromDouble $ 1.5*sin (2*pi*t)) ) theTimes
 
 mySignalA :: Signal Double 
 mySignalA = genericSignal 
 
-mySignalC :: Signal (Fixed Int16 3 Unsaturated) 
+mySignalC :: Signal (Fixed Int16 14 Saturated) 
 mySignalC = genericSignal
 
+mySignalD :: Signal (Fixed Int16 3 Saturated) 
+mySignalD = genericSignal
 
 mySignalB = mapS (\t -> 0.8*cos (2*pi*t*30)*(1.0 + 0.8*cos(2*pi*t*10))) theTimes
 
 plotStyle =  
 	let lightBlue = Rgb 0.6 0.6 1.0
 	    lightRed = Rgb 1.0 0.6 0.6
+	    lightGreen = Rgb 0.6 1.0 0.6
 	in
 	(defaultPlotStyle { title = Just "Temporal"
-        	          , signalStyles = [defaultSignalStyle 1.0 lightBlue, defaultSignalStyle 1.0 lightRed]
+        	          , signalStyles = [ defaultSignalStyle 1.0 lightBlue
+        	                           , defaultSignalStyle 1.0 lightRed
+        	                           , defaultSignalStyle 1.0 lightGreen
+        	                           ]
         	          , verticalLabel = Just "Amplitude"
         	          })  
 fftStyle = plotStyle {verticalLabel = Just "Energy", title = Just "Frequential", horizontalLabel = Just "Hz"}
 
-pict = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) [AS mySignalA,AS mySignalC] plotStyle 
+pict = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) [AS mySignalA,AS mySignalC, AS mySignalD] plotStyle 
 
 n = duration / 0.01
-spectruma = fromVectorS . spectrum 0.01 . takeVectorS (floor n) $ mySignalA 
-spectrumb = fromVectorS . spectrum 0.01 . takeVectorS (floor n) $ mySignalB
+spectruma :: Signal Double
+spectruma = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n) . mapS toDouble $ mySignalA
+
+spectrumc :: Signal Double
+spectrumc = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n) . mapS toDouble $ mySignalC  
+
+spectrumb :: Signal Double
+spectrumb = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n) . mapS toDouble $ mySignalB
 
 frequencies :: Signal Double
 frequencies = (uniformSamples (1.0 / duration) 0.0)
 
-pictb = display $ discreteSignalsWithStyle (takeWhileS (<= 100.0) frequencies) [AS spectruma,AS spectrumb] fftStyle 
+pictb = display $ discreteSignalsWithStyle (takeWhileS (<= 100.0) frequencies) [AS spectruma,AS spectrumc] fftStyle 

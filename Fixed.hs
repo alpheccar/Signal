@@ -8,8 +8,8 @@ module Fixed(
       nbFractionalBits
     , HasDoubleRepresentation(..)
     , FixedPoint(..)
-    , saturate 
-    , unsaturate
+    , withSaturation 
+    , withoutSaturation
     , Fixed
     , Saturation(..)
     , Int16
@@ -251,11 +251,11 @@ instance (SingI n, Integral a) => Show (Fixed a n s) where
         printf ("%f") ((fromIntegral a)*fr)
 
 
-saturate :: Fixed n s sa -> Fixed n s Saturated 
-saturate (Fixed a) = Fixed a 
+withSaturation :: Fixed n s sa -> Fixed n s Saturated 
+withSaturation (Fixed a) = Fixed a 
 
-unsaturate :: Fixed n s sa -> Fixed n s Unsaturated 
-unsaturate (Fixed a) = Fixed a 
+withoutSaturation :: Fixed n s sa -> Fixed n s Unsaturated 
+withoutSaturation (Fixed a) = Fixed a 
 
 
 standardInt16Div :: (SingI n,Num (Fixed Int16 n s)) => Fixed Int16 n s -> Fixed Int16 n s -> Fixed Int16 n s 
@@ -264,7 +264,7 @@ standardInt16Div fa@(Fixed a) (Fixed b) =
               | b == 0 = error "Can't divide by 0"
               | signum a * signum b < 0 = -1 
               | otherwise = 1 
-            rescale f x y | x > y = rescale (f+1) x (y `shift` 1) 
+            rescale f x y | x > y = rescale (f+1) x (y `shiftL` 1) 
                           | otherwise = (f,x,y) 
             (f,ra,rb) = rescale 0 (abs a) (abs b) 
             la = (fromIntegral ra :: Int32) `shiftL` 16 
@@ -276,12 +276,12 @@ standardInt16Div fa@(Fixed a) (Fixed b) =
         in 
         fromRawValue $ (fromIntegral nr)
 
-standardInt16FromRational :: (SingI n,Num (Fixed Int16 n s)) => Rational -> Fixed Int16 n s
+standardInt16FromRational :: (SingI n,HasDoubleRepresentation (Fixed Int16 n s),Num (Fixed Int16 n s)) => Rational -> Fixed Int16 n s
 standardInt16FromRational r = 
         let n = numerator r 
             d = denominator r 
         in 
-        (fromIntegral n) `standardInt16Div` (fromIntegral d)
+       fromDouble $ fromIntegral n / fromIntegral d
 
 standardInt32Div :: (SingI n,Num (Fixed Int32 n s)) => Fixed Int32 n s -> Fixed Int32 n s -> Fixed Int32 n s 
 standardInt32Div fa@(Fixed a) (Fixed b) = 
@@ -289,7 +289,7 @@ standardInt32Div fa@(Fixed a) (Fixed b) =
               | b == 0 = error "Can't divide by 0"
               | signum a * signum b < 0 = -1 
               | otherwise = 1 
-            rescale f x y | x > y = rescale (f+1) x (y `shift` 1) 
+            rescale f x y | x > y = rescale (f+1) x (y `shiftL` 1) 
                           | otherwise = (f,x,y) 
             (f,ra,rb) = rescale 0 (abs a) (abs b) 
             la = (fromIntegral ra :: Int64) `shiftL` 32 
@@ -301,12 +301,12 @@ standardInt32Div fa@(Fixed a) (Fixed b) =
         in 
         fromRawValue $ (fromIntegral nr)
 
-standardInt32FromRational :: (SingI n,Num (Fixed Int32 n s)) => Rational -> Fixed Int32 n s
+standardInt32FromRational :: (SingI n,HasDoubleRepresentation (Fixed Int32 n s),Num (Fixed Int32 n s)) => Rational -> Fixed Int32 n s
 standardInt32FromRational r = 
         let n = numerator r 
             d = denominator r 
         in 
-        (fromIntegral n) `standardInt32Div` (fromIntegral d)
+        fromDouble $ fromIntegral n / fromIntegral d
 
 instance SingI n => Fractional (Fixed Int16 n Saturated) where 
     (/)  = standardInt16Div
@@ -348,8 +348,48 @@ instance FixedPoint Int40 where
     fromRawValue = Fixed
     toRawValue (Fixed a) = a
 
-instance (SingI n, Integral a) => HasDoubleRepresentation (Fixed a n sa) where 
-   toDouble f@(Fixed a) = fromIntegral a * 2**(fromIntegral $ -nbFractionalBits f)
-   fromDouble a = let ra = Fixed $ floor (a * 2**(fromIntegral $ nbFractionalBits ra))
-                  in 
-                  ra
+genericFromDouble16 :: (SingI n, Num (Fixed Int16 n sa)) => Double -> Fixed Int16 n sa 
+genericFromDouble16 a = let la = saturate16 (floor (a * 2**(fromIntegral $ nbFractionalBits ra)) :: Int32)
+                            ra = fromRawValue la
+                        in 
+                        ra
+
+genericFromDouble32 :: (SingI n, Num (Fixed Int32 n sa)) => Double -> Fixed Int32 n sa 
+genericFromDouble32 a = let la = saturate32 (floor (a * 2**(fromIntegral $ nbFractionalBits ra)) :: Int64)
+                            ra = fromRawValue la
+                        in 
+                        ra
+
+genericFromDouble40 :: (SingI n, Num (Fixed Int40 n sa)) => Double -> Fixed Int40 n sa 
+genericFromDouble40 a = let la = saturate40 (floor (a * 2**(fromIntegral $ nbFractionalBits ra)) :: Int64)
+                            ra = fromRawValue la
+                        in 
+                        ra
+
+genericToDouble :: (SingI n, Integral a) => Fixed a n s -> Double 
+genericToDouble f@(Fixed a) = fromIntegral a * 2**(- fromIntegral (nbFractionalBits f))
+
+instance SingI n => HasDoubleRepresentation (Fixed Int16 n Unsaturated) where 
+   toDouble = genericToDouble
+   fromDouble = genericFromDouble16
+
+instance SingI n => HasDoubleRepresentation (Fixed Int16 n Saturated) where 
+   toDouble = genericToDouble
+   fromDouble = genericFromDouble16
+
+
+instance SingI n => HasDoubleRepresentation (Fixed Int32 n Unsaturated) where 
+   toDouble = genericToDouble
+   fromDouble = genericFromDouble32
+
+instance SingI n => HasDoubleRepresentation (Fixed Int32 n Saturated) where 
+   toDouble = genericToDouble
+   fromDouble = genericFromDouble32
+
+instance SingI n => HasDoubleRepresentation (Fixed Int40 n Unsaturated) where 
+   toDouble = genericToDouble
+   fromDouble = genericFromDouble40
+
+instance SingI n => HasDoubleRepresentation (Fixed Int40 n Saturated) where 
+   toDouble = genericToDouble
+   fromDouble = genericFromDouble40
