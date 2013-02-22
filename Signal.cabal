@@ -24,6 +24,8 @@ library
     Generators
     Fixed
     TestCases
+    Common
+    Windows
   -- other-modules:       
   build-depends:       
      base ==4.6.*,

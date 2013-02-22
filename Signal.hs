@@ -88,12 +88,14 @@ module Signal(
 	) where 
 
 import qualified Prelude as P
-import Prelude(Int(..),Maybe(..),Bool(..),Eq(..),Integral(..),($),(.),Num(..),Ord(..),otherwise)
+import Prelude(Int(..),Maybe(..),Bool(..),Eq(..),Integral(..),($),(.),Num(..),Ord(..),Show
+              ,otherwise,Floating,Fractional,Real,Read,RealFloat,RealFrac)
 import Internal
 import qualified Data.Vector.Unboxed as U
 import Data.Vector.Unboxed((!),Unbox(..))
 import Data.Stream(stream,unstream,Stream(..),Step(..),L(..))
 import Data.List.Stream
+
 
 headS :: Signal a -> a
 headS (Signal a) = head a

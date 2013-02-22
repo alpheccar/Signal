@@ -13,6 +13,8 @@ import Signal
 import Generators
 import Fixed
 import TestCases
+import Common 
+import Windows
 
 testa :: Signal Int -> Signal Int
 --testa = map (+11) . map (+23)
@@ -22,13 +24,20 @@ test1 = takeS 10  . testa $ fromListS ([1..] :: [Int])
 test2 = takeS 11  . consS 26 . testa $ fromListS ([1..] :: [Int])
 
 
-duration :: Double
+duration :: Time
 duration = 4.0
-theTimes = uniformSamples 0.01 0.0
+
+samplingPeriod :: Time 
+samplingPeriod = Time 0.01
+
+samplingFrequency :: Frequency 
+samplingFrequency = Frequency (1.0 / 0.01)
+
+theTimes = uniformSamples samplingPeriod 0.0
 
 -- | This signal is working for any type with a Double representation
 genericSignal :: forall a. (Fractional a, HasDoubleRepresentation a) => Signal a
-genericSignal = mapS (\t ->  2*(fromDouble $ 1.5*sin (2*pi*t)) ) theTimes
+genericSignal = mapS (\t ->  2*(fromDouble $ 1.5*sin (2*pi*getT t)) ) theTimes
 
 mySignalA :: Signal Double 
 mySignalA = genericSignal 
@@ -42,7 +51,10 @@ mySignalD = genericSignal
 mySignalE:: Signal (Fixed Int16 14 Unsaturated) 
 mySignalE = genericSignal
 
-mySignalB = mapS (\t -> 0.8*cos (2*pi*t*30)*(1.0 + 0.8*cos(2*pi*t*10))) theTimes
+mySignalB = mapS (\t -> 0.8*cos (2*pi*getT t*30)*(1.0 + 0.8*cos(2*pi*getT t*10))) theTimes
+
+win :: Signal Double
+win = fromListS $ map (\i -> tukey 0.3 100 i 1.0) [0..99]
 
 plotStyle =  
 	let lightBlue = Rgb 0.6 0.6 1.0
@@ -56,27 +68,40 @@ plotStyle =
         	                           ]
         	          , verticalLabel = Just "Amplitude"
         	          })  
-fftStyle = plotStyle {verticalLabel = Just "Energy", title = Just "Frequential", horizontalLabel = Just "Hz"}
+fftStyle = 
+	let lightBlue = Rgb 0.6 0.6 1.0
+	    lightRed = Rgb 1.0 0.6 0.6
+	    lightGreen = Rgb 0.6 1.0 0.6
+	in
+	plotStyle { verticalLabel = Just "Energy", title = Just "Frequential", horizontalLabel = Just "Hz"
+                     , signalStyles = [ defaultSignalStyle 1.0 lightBlue
+        	                          , defaultSignalStyle 1.0 lightRed
+        	                          , defaultSignalStyle 1.0 lightGreen
+        	                          ]
+        	         }
 
 pict = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) [ AS mySignalA
                                                                               , AS mySignalC
-                                                                              , AS mySignalD
-                                                                              , AS mySignalE] plotStyle 
+                                                                              , AS mySignalD                                                                            , AS mySignalE] plotStyle 
+pictwin = display $ discreteSignalsWithStyle ([0..99] :: [Double]) [AS win] plotStyle
 
-n = duration / 0.01
 spectruma :: Signal Double
-spectruma = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n) . mapS toDouble $ mySignalA
+(freqR,spectruma) = spectrum samplingFrequency duration (tukey 0.3) mySignalA
 
+-- To debug : fixed point typing problem
 spectrumc :: Signal Double
-spectrumc = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n) . mapS toDouble $ mySignalC  
+(_,spectrumc) = spectrum samplingFrequency duration (tukey 0.3) (mapS toDouble mySignalC)  
 
+-- To debug : fixed point typing problem
 spectrumd :: Signal Double
-spectrumd = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n) . mapS toDouble $ mySignalD  
+(_,spectrumd) = spectrum samplingFrequency duration (tukey 0.3) mySignalD  
 
 spectrumb :: Signal Double
-spectrumb = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n) . mapS toDouble $ mySignalB
+(_,spectrumb) = spectrum samplingFrequency duration (tukey 0.3) mySignalB
 
-frequencies :: Signal Double
-frequencies = (uniformSamples (1.0 / duration) 0.0)
+frequencies :: Signal Frequency
+frequencies = uniformSamples freqR 0.0
 
-pictb = display $ discreteSignalsWithStyle (takeWhileS (<= 100.0) frequencies) [AS spectruma, AS spectrumd] fftStyle 
+pictb = display $ discreteSignalsWithStyle (takeWhileS (<= 100.0) frequencies) [ AS spectruma
+                                                                               , AS spectrumc 
+                                                                               , AS spectrumd] fftStyle 

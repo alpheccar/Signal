@@ -138,12 +138,14 @@ signalsWithStyle signals style = StyledSignal signals style
 data AnySignal = forall b. HasDoubleRepresentation b => AS (Signal b) 
 
 -- | Create a plot description with discrete signals and a plot style
-discreteSignalsWithStyle :: [Double]
+discreteSignalsWithStyle :: HasDoubleRepresentation t 
+                         => [t]
                          -> [AnySignal] 
                          -> PlotStyle Double Double 
                          -> StyledSignal Double Double 
-discreteSignalsWithStyle theTimes signals style = 
-    let convertSignal (AS s) = map toDouble . toListS $ s
+discreteSignalsWithStyle theTimes' signals style = 
+    let theTimes = map toDouble theTimes'
+        convertSignal (AS s) = map toDouble . toListS $ s
         timedSignal s = zip theTimes (convertSignal s)
         theCurves = map timedSignal signals
     in 

@@ -18,6 +18,7 @@ module Fixed(
     , Rounding(..)
     , AccurateMul(..)
     , Conversion(..)
+    , amulc
     ) where 
 
 import Data.Typeable
@@ -31,10 +32,12 @@ import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as M
 import Control.Monad(liftM)
+import Common(HasDoubleRepresentation(..))
+import Data.Complex
 
---import Debug.Trace
+import Debug.Trace
 
---debug a = trace (show a) a 
+debug a = trace (show a) a 
 
 newtype Int40 = Int40 Int64 deriving(Eq,Ord,Integral,Real)
 
@@ -61,11 +64,7 @@ instance Bounded Int40 where
     minBound = Int40 0xffffffff8000000000
     maxBound = Int40 0x000000007fffffffff
 
--- | Signals can use values which are not directly doubles (like voltage etc ...)
--- Those values must be convertible into Double for display on a graphic
-class HasDoubleRepresentation a where
-    toDouble :: a -> Double 
-    fromDouble :: Double -> a
+
 
 instance HasDoubleRepresentation Double where 
     toDouble = id 
@@ -82,11 +81,17 @@ instance HasDoubleRepresentation Int where
 class Rounding a s where
      roundf :: (SingI n,Num (Fixed a n s)) => Fixed a n s -> Fixed Int16 0 s 
 
-instance Rounding Int32 s where
+instance Rounding Int32 Unsaturated where
   roundf f = 
     let Fixed r = f + fromRawValue (1 `shiftL` ((nbFractionalBits f) - 1))
     in
     Fixed (fromIntegral $ r `shiftR` (nbFractionalBits f))
+
+instance Rounding Int32 Saturated where
+  roundf f = 
+    let Fixed r = f + fromRawValue (1 `shiftL` ((nbFractionalBits f) - 1))
+    in
+    Fixed (saturate16 $ fromIntegral $ r `shiftR` (nbFractionalBits f))
 
 instance Rounding Int40 Unsaturated where
   roundf f = 
@@ -98,13 +103,30 @@ instance Rounding Int40 Saturated where
   roundf f = 
     let Fixed (Int40 r) = f + fromRawValue (Int40 (1 `shiftL` ((nbFractionalBits f) - 1)))
     in
-    Fixed (fromIntegral $ (saturate32 r) `shiftR` (nbFractionalBits f))
+    Fixed (saturate16' $ fromIntegral $ r `shiftR` (nbFractionalBits f))
 
 newtype Fixed :: * -> Nat -> Saturation -> * where Fixed :: a -> Fixed a n sa
 
 data Saturation = Saturated | Unsaturated 
 
 newtype instance Sing (n :: Saturation) = Sat Saturation
+
+type instance (15 :: Nat) + (1 :: Nat)  = 16
+type instance (15 :: Nat) + (2 :: Nat)  = 17
+type instance (15 :: Nat) + (3 :: Nat)  = 18
+type instance (15 :: Nat) + (4 :: Nat)  = 19
+type instance (15 :: Nat) + (5 :: Nat)  = 20
+type instance (15 :: Nat) + (6 :: Nat)  = 21
+type instance (15 :: Nat) + (7 :: Nat)  = 22
+type instance (15 :: Nat) + (8 :: Nat)  = 23
+type instance (15 :: Nat) + (9 :: Nat)  = 24
+type instance (15 :: Nat) + (10 :: Nat)  = 25
+type instance (15 :: Nat) + (11 :: Nat)  = 26
+type instance (15 :: Nat) + (12 :: Nat)  = 27
+type instance (15 :: Nat) + (13 :: Nat)  = 28
+type instance (15 :: Nat) + (14 :: Nat)  = 29
+type instance (15 :: Nat) + (15 :: Nat)  = 30
+type instance (15 :: Nat) + (16 :: Nat)  = 31
 
 instance SingI Saturated where 
   sing = Sat Saturated
@@ -318,17 +340,17 @@ nbFractionalBits :: SingI n => Fixed a (n :: Nat) sa -> Int
 nbFractionalBits f = fromIntegral $ getFract f sing
 
 saturate16 :: Int32 -> Int16 
-saturate16 i | i > 0X00007fff = maxBound
+saturate16 i | i > 0x00007fff = maxBound
              | i < 0xffff8000 = minBound 
              | otherwise = fromIntegral i
 
 saturate16' :: Int64 -> Int16 
-saturate16' i | i > 0X00007fff = maxBound
-              | i < 0xffff8000 = minBound 
+saturate16' i | i > 0x0000000000007fff = maxBound
+              | i < 0xffffffffffff8000 = minBound 
               | otherwise = fromIntegral i
 
 saturate32 :: Int64 -> Int32 
-saturate32 i | i > 0X000000007fffffff = maxBound
+saturate32 i | i > 0x000000007fffffff = maxBound
              | i < 0xffffffff80000000 = minBound 
              | otherwise = fromIntegral i
 
@@ -344,8 +366,7 @@ instance Ord a => Ord (Fixed a n sa) where
     compare (Fixed a) (Fixed b) = compare a b
 
 class AccurateMul a b where 
-  amul :: SingI n => Fixed a n s -> Fixed a n s -> Fixed b (n + n) s
-
+  amul :: (SingI na, SingI nb) => Fixed a na s -> Fixed a nb s -> Fixed b (na + nb) s
 
 instance AccurateMul Int16 Int32 where 
   amul fa@(Fixed a) (Fixed b) = 
@@ -363,38 +384,36 @@ instance AccurateMul Int16 Int40 where
         in
         Fixed (fromIntegral r)
 
+amulc :: (SingI na,SingI nb, AccurateMul a b, Num (Fixed b (na+nb) s)) 
+      => Complex (Fixed a na s) 
+      -> Complex (Fixed a nb s) 
+      -> Complex (Fixed b (na+nb) s)
+amulc (xr :+ xi) (yr :+ yi) = (amul xr yr - amul xi yi) :+ (amul xr yi + amul xi yr)
+
 class Conversion a b where
   convert :: a -> b 
 
-instance (SingI na, SingI nb,Integral a, Num b) => Conversion (Fixed a na s) (Fixed b nb Unsaturated) where 
+instance (SingI na, SingI nb) => Conversion (Fixed Int32 na s) (Fixed Int16 nb Saturated) where 
+  convert fa@(Fixed a) =
+    let la = fromIntegral a :: Int64 
+        lb = la `shift` ((nbFractionalBits fb) - (nbFractionalBits fa))
+        fb = Fixed (saturate16' lb)
+    in 
+    fb
+
+instance (SingI na, SingI nb) => Conversion (Fixed Int16 na s) (Fixed Int32 nb Saturated) where 
+  convert fa@(Fixed a) =
+    let la = fromIntegral a :: Int32
+        lb = la `shift` ((nbFractionalBits fb) - (nbFractionalBits fa)) 
+        fb = Fixed lb
+    in 
+    fb
+
+instance (SingI na, SingI nb) => Conversion (Fixed Int16 na s) (Fixed Int40 nb Saturated) where 
   convert fa@(Fixed a) = 
     let la = fromIntegral a :: Int64 
         lb = la `shift` ((nbFractionalBits fb) - (nbFractionalBits fa)) 
         fb = Fixed (fromIntegral lb)
-    in 
-    fb
-
-instance (SingI na, SingI nb,Integral a) => Conversion (Fixed a na s) (Fixed Int16 nb Saturated) where 
-  convert fa@(Fixed a) =
-    let la = fromIntegral a :: Int64 
-        lb = la `shift` ((nbFractionalBits fb) - (nbFractionalBits fa))
-        fb = Fixed (fromIntegral $ saturate16' lb) 
-    in 
-    fb
-
-instance (SingI na, SingI nb,Integral a) => Conversion (Fixed a na s) (Fixed Int32 nb Saturated) where 
-  convert fa@(Fixed a) =
-    let la = fromIntegral a :: Int64 
-        lb = la `shift` ((nbFractionalBits fb) - (nbFractionalBits fa)) 
-        fb = Fixed (fromIntegral $ saturate32 lb)
-    in 
-    fb
-
-instance (SingI na, SingI nb,Integral a) => Conversion (Fixed a na s) (Fixed Int40 nb Saturated) where 
-  convert fa@(Fixed a) = 
-    let la = fromIntegral a :: Int64 
-        lb = la `shift` ((nbFractionalBits fb) - (nbFractionalBits fa)) 
-        fb = Fixed (fromIntegral $ saturate40 lb)
     in 
     fb
 
@@ -457,12 +476,12 @@ instance SingI n => Num (Fixed Int40 n Unsaturated) where
 instance SingI n => Num (Fixed Int32 n Saturated) where 
     (+) (Fixed a) (Fixed b) = 
         let la = fromIntegral a :: Int64 
-            lb = fromIntegral a :: Int64 
+            lb = fromIntegral b :: Int64 
         in
         Fixed  (saturate32 $ la + lb)
     (-) (Fixed a) (Fixed b) = 
         let la = fromIntegral a :: Int64 
-            lb = fromIntegral a :: Int64 
+            lb = fromIntegral b :: Int64 
         in
         Fixed (saturate32 $ la - lb)
     abs (Fixed a) | a == minBound = Fixed maxBound 
@@ -484,12 +503,12 @@ instance SingI n => Num (Fixed Int32 n Saturated) where
 instance SingI n => Num (Fixed Int40 n Saturated) where 
     (+) (Fixed a) (Fixed b) = 
         let la = fromIntegral a :: Int64 
-            lb = fromIntegral a :: Int64 
+            lb = fromIntegral b :: Int64 
         in
         Fixed  (saturate40 $ la + lb)
     (-) (Fixed a) (Fixed b) = 
         let la = fromIntegral a :: Int64 
-            lb = fromIntegral a :: Int64 
+            lb = fromIntegral b :: Int64 
         in
         Fixed (saturate40 $ la - lb)
     abs (Fixed a) | a == minBound = Fixed maxBound 
@@ -686,3 +705,166 @@ instance SingI n => HasDoubleRepresentation (Fixed Int40 n Unsaturated) where
 instance SingI n => HasDoubleRepresentation (Fixed Int40 n Saturated) where 
    toDouble = genericToDouble
    fromDouble = genericFromDouble40
+
+
+{-
+
+Hacks because Unbox (Complex a) is requiring RealFloat a for a reason I don't yet understand
+
+-}
+
+-- -------
+-- Complex
+-- -------
+
+instance Floating Int16 where 
+   pi = undefined
+   exp = undefined
+   log = undefined
+   sin = undefined
+   cos = undefined
+   sinh = undefined
+   cosh = undefined
+   asin = undefined
+   acos = undefined
+   atan = undefined
+   asinh = undefined
+   acosh = undefined
+   atanh = undefined
+
+instance Floating Int32 where 
+   pi = undefined
+   exp = undefined
+   log = undefined
+   sin = undefined
+   cos = undefined
+   sinh = undefined
+   cosh = undefined
+   asin = undefined
+   acos = undefined
+   atan = undefined
+   asinh = undefined
+   acosh = undefined
+   atanh = undefined
+
+instance Floating Int40 where 
+   pi = undefined
+   exp = undefined
+   log = undefined
+   sin = undefined
+   cos = undefined
+   sinh = undefined
+   cosh = undefined
+   asin = undefined
+   acos = undefined
+   atan = undefined
+   asinh = undefined
+   acosh = undefined
+   atanh = undefined
+
+instance Floating Int64 where 
+   pi = undefined
+   exp = undefined
+   log = undefined
+   sin = undefined
+   cos = undefined
+   sinh = undefined
+   cosh = undefined
+   asin = undefined
+   acos = undefined
+   atan = undefined
+   asinh = undefined
+   acosh = undefined
+   atanh = undefined
+
+instance Fractional Int16 where 
+    (/)  = undefined
+    fromRational = undefined
+
+instance Fractional Int32 where 
+    (/)  = undefined
+    fromRational = undefined
+
+instance Fractional Int40 where 
+    (/)  = undefined
+    fromRational = undefined
+
+instance Fractional Int64 where 
+    (/)  = undefined
+    fromRational = undefined
+
+instance RealFrac Int16 where 
+  properFraction = undefined
+
+instance RealFrac Int32 where 
+  properFraction = undefined
+
+instance RealFrac Int40 where 
+  properFraction = undefined
+
+instance RealFrac Int64 where 
+  properFraction = undefined
+
+instance RealFloat Int16 where
+  isInfinite = undefined
+  isDenormalized = undefined
+  isNegativeZero = undefined
+  isIEEE = undefined
+  isNaN = undefined
+  encodeFloat = undefined
+  decodeFloat = undefined
+  floatRange = undefined
+  floatRadix = undefined
+  floatDigits = undefined
+  exponent = undefined
+  significand = undefined 
+  scaleFloat = undefined
+  atan2 = undefined
+
+instance RealFloat Int32 where
+  isInfinite = undefined
+  isDenormalized = undefined
+  isNegativeZero = undefined
+  isIEEE = undefined
+  isNaN = undefined
+  encodeFloat = undefined
+  decodeFloat = undefined
+  floatRange = undefined
+  floatRadix = undefined
+  floatDigits = undefined
+  exponent = undefined
+  significand = undefined 
+  scaleFloat = undefined
+  atan2 = undefined
+
+instance RealFloat Int40 where
+  isInfinite = undefined
+  isDenormalized = undefined
+  isNegativeZero = undefined
+  isIEEE = undefined
+  isNaN = undefined
+  encodeFloat = undefined
+  decodeFloat = undefined
+  floatRange = undefined
+  floatRadix = undefined
+  floatDigits = undefined
+  exponent = undefined
+  significand = undefined 
+  scaleFloat = undefined
+  atan2 = undefined
+
+instance RealFloat Int64 where
+  isInfinite = undefined
+  isDenormalized = undefined
+  isNegativeZero = undefined
+  isIEEE = undefined
+  isNaN = undefined
+  encodeFloat = undefined
+  decodeFloat = undefined
+  floatRange = undefined
+  floatRadix = undefined
+  floatDigits = undefined
+  exponent = undefined
+  significand = undefined 
+  scaleFloat = undefined
+  atan2 = undefined
