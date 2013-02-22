@@ -23,6 +23,7 @@ library
     Signal 
     Generators
     Fixed
+    TestCases
   -- other-modules:       
   build-depends:       
      base ==4.6.*,
@@ -30,4 +31,8 @@ library
      hmatrix ==0.14.*,
      stream-fusion ==0.1.*,
      HPDF ==1.4.*,
-     HaskellViewer ==0.1.*
+     HaskellViewer ==0.1.*,
+     test-framework ==0.8.*,
+     test-framework-hunit ==0.3.*,
+     HUnit ==1.2.5.*,
+     primitive ==0.5.*

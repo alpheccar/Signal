@@ -12,6 +12,7 @@ import Transform
 import Signal
 import Generators
 import Fixed
+import TestCases
 
 testa :: Signal Int -> Signal Int
 --testa = map (+11) . map (+23)
@@ -38,6 +39,9 @@ mySignalC = genericSignal
 mySignalD :: Signal (Fixed Int16 3 Saturated) 
 mySignalD = genericSignal
 
+mySignalE:: Signal (Fixed Int16 14 Unsaturated) 
+mySignalE = genericSignal
+
 mySignalB = mapS (\t -> 0.8*cos (2*pi*t*30)*(1.0 + 0.8*cos(2*pi*t*10))) theTimes
 
 plotStyle =  
@@ -54,7 +58,10 @@ plotStyle =
         	          })  
 fftStyle = plotStyle {verticalLabel = Just "Energy", title = Just "Frequential", horizontalLabel = Just "Hz"}
 
-pict = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) [AS mySignalA,AS mySignalC, AS mySignalD] plotStyle 
+pict = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) [ AS mySignalA
+                                                                              , AS mySignalC
+                                                                              , AS mySignalD
+                                                                              , AS mySignalE] plotStyle 
 
 n = duration / 0.01
 spectruma :: Signal Double
@@ -63,10 +70,13 @@ spectruma = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n
 spectrumc :: Signal Double
 spectrumc = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n) . mapS toDouble $ mySignalC  
 
+spectrumd :: Signal Double
+spectrumd = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n) . mapS toDouble $ mySignalD  
+
 spectrumb :: Signal Double
 spectrumb = mapS fromDouble . fromVectorS . spectrum 0.01 . takeVectorS (floor n) . mapS toDouble $ mySignalB
 
 frequencies :: Signal Double
 frequencies = (uniformSamples (1.0 / duration) 0.0)
 
-pictb = display $ discreteSignalsWithStyle (takeWhileS (<= 100.0) frequencies) [AS spectruma,AS spectrumc] fftStyle 
+pictb = display $ discreteSignalsWithStyle (takeWhileS (<= 100.0) frequencies) [AS spectruma, AS spectrumd] fftStyle 

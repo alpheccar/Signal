@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, BangPatterns,PolyKinds, DataKinds, GADTs, GeneralizedNewtypeDeriving,DeriveDataTypeable,FlexibleInstances,ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators,TypeFamilies,MultiParamTypeClasses,FlexibleContexts, BangPatterns,PolyKinds, DataKinds, GADTs, GeneralizedNewtypeDeriving,DeriveDataTypeable,FlexibleInstances,ScopedTypeVariables #-}
 {- | Fixed point arithmetic 
 
 Fixed point arithmetic with signed, unsigned and saturation
@@ -15,6 +15,9 @@ module Fixed(
     , Int16
     , Int32 
     , Int40
+    , Rounding(..)
+    , AccurateMul(..)
+    , Conversion(..)
     ) where 
 
 import Data.Typeable
@@ -24,10 +27,14 @@ import Data.Int
 import Data.Bits
 import Text.Printf
 import Data.Ratio
+import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector.Generic as G
+import qualified Data.Vector.Generic.Mutable as M
+import Control.Monad(liftM)
 
-import Debug.Trace
+--import Debug.Trace
 
-debug a = trace (show a) a 
+--debug a = trace (show a) a 
 
 newtype Int40 = Int40 Int64 deriving(Eq,Ord,Integral,Real)
 
@@ -72,11 +79,237 @@ instance HasDoubleRepresentation Int where
     toDouble = fromIntegral
     fromDouble = floor
 
+class Rounding a s where
+     roundf :: (SingI n,Num (Fixed a n s)) => Fixed a n s -> Fixed Int16 0 s 
 
+instance Rounding Int32 s where
+  roundf f = 
+    let Fixed r = f + fromRawValue (1 `shiftL` ((nbFractionalBits f) - 1))
+    in
+    Fixed (fromIntegral $ r `shiftR` (nbFractionalBits f))
+
+instance Rounding Int40 Unsaturated where
+  roundf f = 
+    let Fixed (Int40 r) = f + fromRawValue (Int40 (1 `shiftL` ((nbFractionalBits f) - 1)))
+    in
+    Fixed (fromIntegral $ r `shiftR` (nbFractionalBits f))
+
+instance Rounding Int40 Saturated where
+  roundf f = 
+    let Fixed (Int40 r) = f + fromRawValue (Int40 (1 `shiftL` ((nbFractionalBits f) - 1)))
+    in
+    Fixed (fromIntegral $ (saturate32 r) `shiftR` (nbFractionalBits f))
+
+newtype Fixed :: * -> Nat -> Saturation -> * where Fixed :: a -> Fixed a n sa
 
 data Saturation = Saturated | Unsaturated 
 
-newtype Fixed :: * -> Nat -> Saturation -> * where Fixed :: a -> Fixed a n sa
+newtype instance Sing (n :: Saturation) = Sat Saturation
+
+instance SingI Saturated where 
+  sing = Sat Saturated
+
+instance SingI Unsaturated where 
+  sing = Sat Unsaturated
+
+instance SingE (Kind :: Saturation) Saturation where
+  fromSing (Sat n) = n
+
+newtype instance U.MVector s (Fixed a n sat)  = MVFixed (U.MVector s a)
+newtype instance U.Vector    (Fixed a n sat) = VFixed (U.Vector a)
+
+instance SingI n => Real (Fixed Int16 n Saturated) where 
+  toRational = toRational . toDouble 
+
+instance SingI n => Real (Fixed Int16 n Unsaturated) where 
+  toRational = toRational . toDouble 
+
+instance SingI n => Real (Fixed Int32 n Saturated) where 
+  toRational = toRational . toDouble 
+
+instance SingI n => Real (Fixed Int32 n Unsaturated) where 
+  toRational = toRational . toDouble 
+
+instance SingI n => Real (Fixed Int40 n Saturated) where 
+  toRational = toRational . toDouble 
+
+instance SingI n => Real (Fixed Int40 n Unsaturated) where 
+  toRational = toRational . toDouble 
+
+instance SingI n => RealFrac (Fixed Int16 n Saturated) where 
+  properFraction a = let (b,na) = properFraction (toDouble a)
+                     in
+                     (b, fromDouble na)
+
+instance SingI n => RealFrac (Fixed Int16 n Unsaturated) where 
+  properFraction a = let (b,na) = properFraction (toDouble a)
+                     in
+                     (b, fromDouble na)
+
+instance SingI n => RealFrac (Fixed Int32 n Saturated) where 
+  properFraction a = let (b,na) = properFraction (toDouble a)
+                     in
+                     (b, fromDouble na)
+
+instance SingI n => RealFrac (Fixed Int32 n Unsaturated) where 
+  properFraction a = let (b,na) = properFraction (toDouble a)
+                     in
+                     (b, fromDouble na)
+
+instance SingI n => Floating (Fixed Int16 n Unsaturated) where 
+   pi = fromDouble pi
+   exp = fromDouble . exp . toDouble
+   log = fromDouble . log . toDouble
+   sin = fromDouble . sin . toDouble
+   cos = fromDouble . cos . toDouble
+   sinh = fromDouble . sinh . toDouble
+   cosh = fromDouble . cosh . toDouble
+   asin = fromDouble . asin . toDouble
+   acos = fromDouble . acos . toDouble
+   atan = fromDouble . atan . toDouble
+   asinh = fromDouble . asinh . toDouble
+   acosh = fromDouble . acosh . toDouble
+   atanh = fromDouble . atanh . toDouble 
+
+instance SingI n => Floating (Fixed Int16 n Saturated) where 
+   pi = fromDouble pi
+   exp = fromDouble . exp . toDouble
+   log = fromDouble . log . toDouble
+   sin = fromDouble . sin . toDouble
+   cos = fromDouble . cos . toDouble
+   sinh = fromDouble . sinh . toDouble
+   cosh = fromDouble . cosh . toDouble
+   asin = fromDouble . asin . toDouble
+   acos = fromDouble . acos . toDouble
+   atan = fromDouble . atan . toDouble
+   asinh = fromDouble . asinh . toDouble
+   acosh = fromDouble . acosh . toDouble
+   atanh = fromDouble . atanh . toDouble  
+
+instance SingI n => Floating (Fixed Int32 n Unsaturated) where 
+   pi = fromDouble pi
+   exp = fromDouble . exp . toDouble
+   log = fromDouble . log . toDouble
+   sin = fromDouble . sin . toDouble
+   cos = fromDouble . cos . toDouble
+   sinh = fromDouble . sinh . toDouble
+   cosh = fromDouble . cosh . toDouble
+   asin = fromDouble . asin . toDouble
+   acos = fromDouble . acos . toDouble
+   atan = fromDouble . atan . toDouble
+   asinh = fromDouble . asinh . toDouble
+   acosh = fromDouble . acosh . toDouble
+   atanh = fromDouble . atanh . toDouble 
+
+instance SingI n => Floating (Fixed Int32 n Saturated) where 
+   pi = fromDouble pi
+   exp = fromDouble . exp . toDouble
+   log = fromDouble . log . toDouble
+   sin = fromDouble . sin . toDouble
+   cos = fromDouble . cos . toDouble
+   sinh = fromDouble . sinh . toDouble
+   cosh = fromDouble . cosh . toDouble
+   asin = fromDouble . asin . toDouble
+   acos = fromDouble . acos . toDouble
+   atan = fromDouble . atan . toDouble
+   asinh = fromDouble . asinh . toDouble
+   acosh = fromDouble . acosh . toDouble
+   atanh = fromDouble . atanh . toDouble  
+
+instance SingI n => RealFloat (Fixed Int16 n Saturated) where
+  isInfinite = isInfinite . toDouble
+  isDenormalized = isDenormalized . toDouble
+  isNegativeZero = isNegativeZero . toDouble
+  isIEEE = isIEEE . toDouble
+  isNaN = isNaN . toDouble
+  encodeFloat a b = fromDouble (encodeFloat a b)
+  decodeFloat = decodeFloat . toDouble
+  floatRange = floatRange . toDouble
+  floatRadix = floatRadix . toDouble
+  floatDigits = floatDigits . toDouble
+  exponent a = exponent (toDouble a)
+  significand = fromDouble . significand . toDouble 
+  scaleFloat i = fromDouble . scaleFloat i . toDouble 
+  atan2 a b = fromDouble (atan2 (toDouble a) (toDouble b))
+
+instance SingI n => RealFloat (Fixed Int16 n Unsaturated) where
+  isInfinite = isInfinite . toDouble
+  isDenormalized = isDenormalized . toDouble
+  isNegativeZero = isNegativeZero . toDouble
+  isIEEE = isIEEE . toDouble
+  isNaN = isNaN . toDouble
+  encodeFloat a b = fromDouble (encodeFloat a b)
+  decodeFloat = decodeFloat . toDouble 
+  floatRange = floatRange . toDouble
+  floatRadix = floatRadix . toDouble
+  floatDigits = floatDigits . toDouble
+  exponent a = exponent (toDouble a)
+  significand = fromDouble . significand . toDouble 
+  scaleFloat i = fromDouble . scaleFloat i . toDouble 
+  atan2 a b = fromDouble (atan2 (toDouble a) (toDouble b))
+
+instance SingI n => RealFloat (Fixed Int32 n Saturated) where
+  isInfinite = isInfinite . toDouble
+  isDenormalized = isDenormalized . toDouble
+  isNegativeZero = isNegativeZero . toDouble
+  isIEEE = isIEEE . toDouble
+  isNaN = isNaN . toDouble 
+  encodeFloat a b = fromDouble (encodeFloat a b)
+  decodeFloat = decodeFloat . toDouble
+  floatRange = floatRange . toDouble
+  floatRadix = floatRadix . toDouble
+  floatDigits = floatDigits . toDouble
+  exponent a = exponent (toDouble a)
+  significand = fromDouble . significand . toDouble 
+  scaleFloat i = fromDouble . scaleFloat i . toDouble 
+  atan2 a b = fromDouble (atan2 (toDouble a) (toDouble b))
+
+instance SingI n => RealFloat (Fixed Int32 n Unsaturated) where
+  isInfinite = isInfinite . toDouble
+  isDenormalized = isDenormalized . toDouble
+  isNegativeZero = isNegativeZero . toDouble
+  isIEEE = isIEEE . toDouble
+  isNaN = isNaN . toDouble
+  encodeFloat a b = fromDouble (encodeFloat a b)
+  decodeFloat = decodeFloat . toDouble 
+  floatRange = floatRange . toDouble
+  floatRadix = floatRadix . toDouble
+  floatDigits = floatDigits . toDouble
+  exponent a = exponent (toDouble a)
+  significand = fromDouble . significand . toDouble 
+  scaleFloat i = fromDouble . scaleFloat i . toDouble 
+  atan2 a b = fromDouble (atan2 (toDouble a) (toDouble b))
+
+instance (U.Unbox a) => M.MVector U.MVector (Fixed a n s) where
+   {-# INLINE basicLength #-}
+   {-# INLINE basicUnsafeSlice #-}
+   {-# INLINE basicOverlaps #-}
+   {-# INLINE basicUnsafeNew #-}
+   {-# INLINE basicUnsafeRead #-}
+   {-# INLINE basicUnsafeWrite #-}
+   basicLength (MVFixed v) = M.basicLength v
+   basicUnsafeSlice a b (MVFixed v) = MVFixed $ M.basicUnsafeSlice a b v
+   basicOverlaps (MVFixed a) (MVFixed b) = M.basicOverlaps a b 
+   basicUnsafeNew n = MVFixed `liftM` M.basicUnsafeNew n
+   basicUnsafeRead (MVFixed v) i = do 
+    r <- M.basicUnsafeRead v i
+    return (Fixed r)
+   basicUnsafeWrite (MVFixed v) i (Fixed r) = do 
+    M.basicUnsafeWrite v i r 
+
+instance (U.Unbox a) => G.Vector U.Vector (Fixed a n s) where
+   {-# INLINE basicLength #-}
+   {-# INLINE basicUnsafeFreeze #-}
+   {-# INLINE basicUnsafeThaw #-}
+   {-# INLINE basicUnsafeSlice #-}
+   {-# INLINE basicUnsafeIndexM #-}
+   basicLength (VFixed v) = G.basicLength v
+   basicUnsafeFreeze (MVFixed v) = VFixed `liftM`G.basicUnsafeFreeze v
+   basicUnsafeThaw (VFixed v) = MVFixed `liftM`G.basicUnsafeThaw v
+   basicUnsafeSlice a b (VFixed v) = VFixed (G.basicUnsafeSlice a b v)
+   basicUnsafeIndexM (VFixed v) i = Fixed `liftM` G.basicUnsafeIndexM v i 
+
+instance (RealFloat a, U.Unbox a) => U.Unbox (Fixed a n sat)
 
 getFract :: Fixed a (n :: Nat) sa -> Sing n -> Integer 
 getFract _ s = fromSing s 
@@ -88,6 +321,11 @@ saturate16 :: Int32 -> Int16
 saturate16 i | i > 0X00007fff = maxBound
              | i < 0xffff8000 = minBound 
              | otherwise = fromIntegral i
+
+saturate16' :: Int64 -> Int16 
+saturate16' i | i > 0X00007fff = maxBound
+              | i < 0xffff8000 = minBound 
+              | otherwise = fromIntegral i
 
 saturate32 :: Int64 -> Int32 
 saturate32 i | i > 0X000000007fffffff = maxBound
@@ -104,6 +342,61 @@ instance Eq a => Eq (Fixed a n sa) where
 
 instance Ord a => Ord (Fixed a n sa) where 
     compare (Fixed a) (Fixed b) = compare a b
+
+class AccurateMul a b where 
+  amul :: SingI n => Fixed a n s -> Fixed a n s -> Fixed b (n + n) s
+
+
+instance AccurateMul Int16 Int32 where 
+  amul fa@(Fixed a) (Fixed b) = 
+        let la = fromIntegral a :: Int64 
+            lb = fromIntegral b :: Int64 
+            r = (la * lb)
+        in
+        Fixed (fromIntegral r)
+
+instance AccurateMul Int16 Int40 where 
+  amul fa@(Fixed a) (Fixed b) = 
+        let la = fromIntegral a :: Int64 
+            lb = fromIntegral b :: Int64 
+            r = (la * lb)
+        in
+        Fixed (fromIntegral r)
+
+class Conversion a b where
+  convert :: a -> b 
+
+instance (SingI na, SingI nb,Integral a, Num b) => Conversion (Fixed a na s) (Fixed b nb Unsaturated) where 
+  convert fa@(Fixed a) = 
+    let la = fromIntegral a :: Int64 
+        lb = la `shift` ((nbFractionalBits fb) - (nbFractionalBits fa)) 
+        fb = Fixed (fromIntegral lb)
+    in 
+    fb
+
+instance (SingI na, SingI nb,Integral a) => Conversion (Fixed a na s) (Fixed Int16 nb Saturated) where 
+  convert fa@(Fixed a) =
+    let la = fromIntegral a :: Int64 
+        lb = la `shift` ((nbFractionalBits fb) - (nbFractionalBits fa))
+        fb = Fixed (fromIntegral $ saturate16' lb) 
+    in 
+    fb
+
+instance (SingI na, SingI nb,Integral a) => Conversion (Fixed a na s) (Fixed Int32 nb Saturated) where 
+  convert fa@(Fixed a) =
+    let la = fromIntegral a :: Int64 
+        lb = la `shift` ((nbFractionalBits fb) - (nbFractionalBits fa)) 
+        fb = Fixed (fromIntegral $ saturate32 lb)
+    in 
+    fb
+
+instance (SingI na, SingI nb,Integral a) => Conversion (Fixed a na s) (Fixed Int40 nb Saturated) where 
+  convert fa@(Fixed a) = 
+    let la = fromIntegral a :: Int64 
+        lb = la `shift` ((nbFractionalBits fb) - (nbFractionalBits fa)) 
+        fb = Fixed (fromIntegral $ saturate40 lb)
+    in 
+    fb
 
 instance SingI n => Num (Fixed Int16 n Unsaturated) where 
     (+) (Fixed a) (Fixed b) = Fixed (a + b)

@@ -235,5 +235,5 @@ instance (Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>
         when (isJust (title s)) $ do 
             let t = fromJust (title s)
             drawStringLabel titleStyle t (width / 2.0) (height - titleSep) width (topMargin s)
-        mapM_ drawSignal (zip signals (signalStyles s))
+        mapM_ drawSignal (zip signals (cycle $ signalStyles s))
         (epilog s) pt
