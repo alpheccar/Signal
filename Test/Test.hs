@@ -39,6 +39,9 @@ theTimes = uniformSamples samplingPeriod 0.0
 genericSignal :: forall a. (Fractional a, HasDoubleRepresentation a) => Signal a
 genericSignal = mapS (\t ->  2*(fromDouble $ 1.5*sin (2*pi*getT t)) ) theTimes
 
+constSignal :: Signal Double
+constSignal = mapS (const 1.0) theTimes 
+
 mySignalA :: Signal Double 
 mySignalA = genericSignal 
 
@@ -86,7 +89,10 @@ pict = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) [ 
 pictwin = display $ discreteSignalsWithStyle ([0..99] :: [Double]) [AS win] plotStyle
 
 spectruma :: Signal Double
-(freqR,spectruma) = spectrum samplingFrequency duration (tukey 0.3) mySignalA
+(freqR,spectruma) = spectrum samplingFrequency duration (noWindow) mySignalA
+
+spectrumConst :: Signal Double
+(_,spectrumConst) = spectrum samplingFrequency duration (noWindow) (mapS toDouble constSignal)  
 
 -- To debug : fixed point typing problem
 spectrumc :: Signal Double

@@ -41,13 +41,21 @@ import Debug.Trace
 --debug a = trace ("D> " ++ show a) a
 --debugR a = trace ("DR> " ++ (show . fmap toRawValue $ a)) a
 
+restrictVectorToPOT :: U.Unbox a => U.Vector a -> (Int,U.Vector a) 
+restrictVectorToPOT v' = 
+  let log2 x = log x / log 2 
+      n = floor (log2 (fromIntegral $ U.length v'))
+  in
+  (n,U.generate (1 `shiftL` n) (v' !))
+
 _spectrum :: (FFT a, U.Unbox a, RealFloat a, HasDoubleRepresentation a, Num a) 
           => Time -- ^ Sampling rate
           -> (Int -> Int -> a -> a)
           -> U.Vector a 
           -> U.Vector Double
-_spectrum (Time t) window d = 
-    let l = U.length d
+_spectrum (Time t) window d' = 
+    let (n,d) = restrictVectorToPOT d'
+        l = 1 `shiftL` n
         complexd = U.map (:+ 0) . U.imap (window l) $ d
         m (x :+ y) = 
             let x' = toDouble x 
@@ -178,9 +186,7 @@ genericfft :: (U.Unbox a, RealFloat a, HasDoubleRepresentation a)
     -> U.Vector (Complex a) 
     -> U.Vector (Complex a) 
 genericfft inverse fftCore v' =
-    let log2 x = log x / log 2 
-        n = floor (log2 (fromIntegral $ U.length v'))
-        v = U.generate (1 `shiftL` n) (v' !)
+    let (n,v) = restrictVectorToPOT v' 
         sign | inverse = -1
              | otherwise = 1
         r = do 
@@ -214,7 +220,7 @@ instance (SingI n, SingI (15 + n)) => FFT (Fixed Int16 n Saturated) where
     ifft = genericfft True _fftFixed
 
 testFFT :: Int -> U.Vector (Complex (Fixed Int16 8 Saturated))
-testFFT n = fft $ (U.fromList . map ((:+ 0) . fromIntegral) $ ([1..(1 `shiftL` n)] :: [Int]))
+testFFT n = fft $ (U.fromList . map ((:+ 0) . fromIntegral) $ ([1..(1 `shiftL` n)] ++ [0] :: [Int]))
 --
 testFFT1 :: Int -> U.Vector (Complex Double)
 testFFT1 n = U.convert . F.fft . U.convert $  (U.fromList . map ((:+ 0) . fromIntegral) $ ([1..(1 `shiftL` n)] :: [Int]))--
