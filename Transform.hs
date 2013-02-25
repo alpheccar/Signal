@@ -6,6 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-} 
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds #-}
 module Transform(
       --spectrum 
       fft 
@@ -38,12 +39,12 @@ import Signal
 import GHC.TypeLits
 import Foreign.C.Types
 
-import Debug.Trace
+--import Debug.Trace
 
 isPowerOfTwo :: Word16 -> Bool
 isPowerOfTwo a = (a /= 0) && ((a .&. (a-1)) == 0)
 
-debug a = trace (show a) a
+--debug a = trace (show a) a
 
 restrictVectorToPOT :: U.Unbox a => U.Vector a -> (Int,U.Vector a) 
 restrictVectorToPOT v' | isPowerOfTwo (fromIntegral $ U.length v') = (n,v') 
@@ -51,7 +52,7 @@ restrictVectorToPOT v' | isPowerOfTwo (fromIntegral $ U.length v') = (n,v')
   where log2 x = log x / log 2 
         n = floor (log2 (fromIntegral $ U.length v'))
 
-_spectrum :: (FFT a, U.Unbox a, RealFloat a, HasDoubleRepresentation a, Num a, Show a) 
+_spectrum :: (FFT a, Sample a) 
           => Time -- ^ Sampling rate
           -> (Int -> Int -> a -> a)
           -> U.Vector a 
@@ -68,7 +69,7 @@ _spectrum (Time t) window d' =
     in 
     U.map m . fft  $ complexd
 
-spectrum :: (FFT a, U.Unbox a, HasDoubleRepresentation a, RealFloat a, Num a,Show a) 
+spectrum :: (FFT a, Sample a) 
          => Frequency
          -> Time
          -> (Int -> Int -> a -> a) 
@@ -113,7 +114,7 @@ instance Functor Complex where
 
 type FFTCore a = forall s . Int -> Int -> M.MVector s (Complex a) -> ST s ()
 
-_fft :: (M.Unbox a, RealFloat a, HasDoubleRepresentation a) 
+_fft :: Sample a 
      => Int -- ^ Power of 2
      -> Int
      -> M.MVector s (Complex a) 
@@ -183,11 +184,11 @@ _fftFixed n sign vect = do
         foldM_ forAllBlocks (1 :+ 0) (filter (< step) [0,1..step])
 
 
-genericfft :: (U.Unbox a, RealFloat a, HasDoubleRepresentation a)
-    => Bool 
-    -> FFTCore a
-    -> U.Vector (Complex a) 
-    -> U.Vector (Complex a) 
+genericfft :: Sample a
+           => Bool 
+           -> FFTCore a
+           -> U.Vector (Complex a) 
+           -> U.Vector (Complex a) 
 genericfft inverse fftCore v' =
     let (n,v) = restrictVectorToPOT v' 
         sign | inverse = -1
@@ -206,14 +207,14 @@ genericfft inverse fftCore v' =
     runST r
 
 class FFT a where 
-    fft :: (U.Unbox a, RealFloat a, HasDoubleRepresentation a)
+    fft :: Sample a
         => U.Vector (Complex a) 
         -> U.Vector (Complex a) 
     fft = genericfft False _fft
     
-    ifft :: (U.Unbox a, RealFloat a, HasDoubleRepresentation a)
-        => U.Vector (Complex a) 
-        -> U.Vector (Complex a) 
+    ifft :: Sample a
+         => U.Vector (Complex a) 
+         -> U.Vector (Complex a) 
     ifft = genericfft True _fft
 
 instance FFT Double 
@@ -222,8 +223,8 @@ instance (SingI n, SingI (15 + n)) => FFT (Fixed Int16 n Saturated) where
     fft = genericfft False _fftFixed
     ifft = genericfft True _fftFixed
 
-testFFT :: Int -> Signal Double -> U.Vector (Complex Double)
-testFFT n s = fft . U.map (:+ 0) . takeVectorS n $ s
+testFFT :: (FFT a,Sample a) => Int -> Signal a -> U.Vector (Complex Double)
+testFFT n s = U.map (fmap toDouble) . fft . U.map (:+ 0) . takeVectorS n $ s
 
-testFFT1 :: Int -> Signal Double -> U.Vector (Complex Double)
-testFFT1 n s = U.convert . F.fft . U.convert . U.map (:+ 0) . takeVectorS n $ s
+testFFT1 :: Sample a => Int -> Signal a -> U.Vector (Complex Double)
+testFFT1 n s = U.convert . F.fft . U.convert . U.map ((:+ 0) . toDouble) . takeVectorS n $ s

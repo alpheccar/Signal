@@ -1,6 +1,8 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ConstraintKinds #-}
 module Signal(
 	Signal,
+    Sample(..),
 	   -- * Basic interface
     headS,                   
     tailS, 
@@ -95,7 +97,10 @@ import qualified Data.Vector.Unboxed as U
 import Data.Vector.Unboxed((!),Unbox(..))
 import Data.Stream(stream,unstream,Stream(..),Step(..),L(..))
 import Data.List.Stream
+import Common(HasDoubleRepresentation(..))
 
+
+type Sample a = (RealFrac a, RealFloat a, HasDoubleRepresentation a, Unbox a)
 
 headS :: Signal a -> a
 headS (Signal a) = head a

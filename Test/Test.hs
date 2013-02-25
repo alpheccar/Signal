@@ -39,8 +39,8 @@ samplingFrequency = Frequency (1.0 / 0.01)
 theTimes = uniformSamples samplingPeriod 0.0
 
 -- | This signal is working for any type with a Double representation
-genericSignal :: forall a. (Fractional a, HasDoubleRepresentation a) => Signal a
-genericSignal = mapS (\t ->  2*(fromDouble $ 1.5*sin (2*pi*getT t)) ) theTimes
+genericSignal :: forall a. Sample a => Signal a
+genericSignal = mapS (\t ->  2*(fromDouble $ 1.5*sin (2*pi*getT t) + 0.4*sin(2*pi*20*getT t))) theTimes
 
 constSignal :: Signal Double
 constSignal = mapS (const 1.0) theTimes 
@@ -62,27 +62,26 @@ mySignalB = mapS (\t -> 0.8*cos (2*pi*getT t*30)*(1.0 + 0.8*cos(2*pi*getT t*10))
 win :: Signal Double
 win = fromListS $ map (\i -> tukey 0.3 100 i 1.0) [0..99]
 
+lightBlue = Rgb 0.6 0.6 1.0
+lightRed = Rgb 1.0 0.6 0.6
+lightGreen = Rgb 0.6 1.0 0.6
+lightYellow = Rgb 1.0 1.0 0.6
+
 plotStyle =  
-	let lightBlue = Rgb 0.6 0.6 1.0
-	    lightRed = Rgb 1.0 0.6 0.6
-	    lightGreen = Rgb 0.6 1.0 0.6
-	in
 	(defaultPlotStyle { title = Just "Temporal"
         	          , signalStyles = [ defaultSignalStyle 1.0 lightBlue
         	                           , defaultSignalStyle 1.0 lightRed
         	                           , defaultSignalStyle 1.0 lightGreen
+                                     , defaultSignalStyle 1.0 lightYellow
         	                           ]
         	          , verticalLabel = Just "Amplitude"
         	          })  
 fftStyle = 
-	let lightBlue = Rgb 0.6 0.6 1.0
-	    lightRed = Rgb 1.0 0.6 0.6
-	    lightGreen = Rgb 0.6 1.0 0.6
-	in
 	plotStyle { verticalLabel = Just "Energy", title = Just "Frequential", horizontalLabel = Just "Hz"
                      , signalStyles = [ defaultSignalStyle 1.0 lightBlue
-        	                          , defaultSignalStyle 1.0 lightRed
-        	                          , defaultSignalStyle 1.0 lightGreen
+        	                            , defaultSignalStyle 1.0 lightRed
+        	                            , defaultSignalStyle 1.0 lightGreen
+                                      , defaultSignalStyle 1.0 lightYellow
         	                          ]
         	         }
 
@@ -101,18 +100,22 @@ spectrumConst :: Signal Double
 
 -- To debug : fixed point typing problem
 spectrumc :: Signal Double
-(_,spectrumc) = spectrum samplingFrequency duration (tukey 0.3) (mapS toDouble mySignalC)  
+(_,spectrumc) = spectrum samplingFrequency duration noWindow (mapS toDouble mySignalC)  
 
 -- To debug : fixed point typing problem
 spectrumd :: Signal Double
-(_,spectrumd) = spectrum samplingFrequency duration (tukey 0.3) mySignalD  
+(_,spectrumd) = spectrum samplingFrequency duration noWindow mySignalD  
 
 spectrumb :: Signal Double
-(_,spectrumb) = spectrum samplingFrequency duration (tukey 0.3) mySignalB
+(_,spectrumb) = spectrum samplingFrequency duration noWindow mySignalB
+
+spectrume:: Signal Double
+(_,spectrume) = spectrum samplingFrequency duration noWindow (mapS toDouble mySignalE)
 
 frequencies :: Signal Frequency
 frequencies = uniformSamples freqR 0.0
 
 pictb = display $ discreteSignalsWithStyle (takeWhileS (<= 100.0) frequencies) fftStyle [ AS spectruma 
                                                                                         , AS spectrumc 
-                                                                                        , AS spectrumd]  
+                                                                                        , AS spectrumd
+                                                                                        , AS spectrume]  
