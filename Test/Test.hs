@@ -15,6 +15,9 @@ import Fixed
 import TestCases
 import Common 
 import Windows
+import qualified Data.Vector.Unboxed as U
+import qualified Numeric.GSL.Fourier as F
+
 
 testa :: Signal Int -> Signal Int
 --testa = map (+11) . map (+23)
@@ -83,10 +86,12 @@ fftStyle =
         	                          ]
         	         }
 
-pict = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) [ AS mySignalA
-                                                                              , AS mySignalC
-                                                                              , AS mySignalD                                                                            , AS mySignalE] plotStyle 
-pictwin = display $ discreteSignalsWithStyle ([0..99] :: [Double]) [AS win] plotStyle
+pict = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) plotStyle [ AS mySignalA
+                                                                                        , AS mySignalC
+                                                                                        , AS mySignalD
+                                                                                        , AS mySignalE] 
+
+pictwin = display $ discreteSignalsWithStyle ([0..99] :: [Double]) plotStyle [AS win] 
 
 spectruma :: Signal Double
 (freqR,spectruma) = spectrum samplingFrequency duration (noWindow) mySignalA
@@ -108,6 +113,6 @@ spectrumb :: Signal Double
 frequencies :: Signal Frequency
 frequencies = uniformSamples freqR 0.0
 
-pictb = display $ discreteSignalsWithStyle (takeWhileS (<= 100.0) frequencies) [ AS spectruma
-                                                                               , AS spectrumc 
-                                                                               , AS spectrumd] fftStyle 
+pictb = display $ discreteSignalsWithStyle (takeWhileS (<= 100.0) frequencies) fftStyle [ AS spectruma 
+                                                                                        , AS spectrumc 
+                                                                                        , AS spectrumd]  

@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-} 
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Transform(
@@ -14,6 +14,7 @@ module Transform(
     , testFFT
     , testFFT1
     --, testBitReverse
+    -- , bitReverse
     ) where 
 
 import Data.Complex
@@ -35,20 +36,22 @@ import Common(Time(..),Frequency(..))
 import Windows 
 import Signal 
 import GHC.TypeLits
+import Foreign.C.Types
 
 import Debug.Trace
 
---debug a = trace ("D> " ++ show a) a
---debugR a = trace ("DR> " ++ (show . fmap toRawValue $ a)) a
+isPowerOfTwo :: Word16 -> Bool
+isPowerOfTwo a = (a /= 0) && ((a .&. (a-1)) == 0)
+
+debug a = trace (show a) a
 
 restrictVectorToPOT :: U.Unbox a => U.Vector a -> (Int,U.Vector a) 
-restrictVectorToPOT v' = 
-  let log2 x = log x / log 2 
-      n = floor (log2 (fromIntegral $ U.length v'))
-  in
-  (n,U.generate (1 `shiftL` n) (v' !))
+restrictVectorToPOT v' | isPowerOfTwo (fromIntegral $ U.length v') = (n,v') 
+                       | otherwise = (n,U.generate (1 `shiftL` n) (v' !))
+  where log2 x = log x / log 2 
+        n = floor (log2 (fromIntegral $ U.length v'))
 
-_spectrum :: (FFT a, U.Unbox a, RealFloat a, HasDoubleRepresentation a, Num a) 
+_spectrum :: (FFT a, U.Unbox a, RealFloat a, HasDoubleRepresentation a, Num a, Show a) 
           => Time -- ^ Sampling rate
           -> (Int -> Int -> a -> a)
           -> U.Vector a 
@@ -65,7 +68,7 @@ _spectrum (Time t) window d' =
     in 
     U.map m . fft  $ complexd
 
-spectrum :: (FFT a, U.Unbox a, HasDoubleRepresentation a, RealFloat a, Num a) 
+spectrum :: (FFT a, U.Unbox a, HasDoubleRepresentation a, RealFloat a, Num a,Show a) 
          => Frequency
          -> Time
          -> (Int -> Int -> a -> a) 
@@ -90,10 +93,10 @@ bitReverse bitSize a = fromIntegral $ br (bitSize - 1) 0 (fromIntegral a)
 
 bitReverseA :: (M.Unbox a) => Int -> M.MVector s a -> ST s () 
 bitReverseA nb m = do 
-    let l = 1 `shiftL` (nb-1)
+    let l = 1 `shiftL` nb
     forM_ [0..l-1] $ \i -> do 
       let j = fromIntegral $ bitReverse nb (fromIntegral i) 
-      M.swap m i j 
+      when (j > i) $ M.swap m i j 
 
 --testBitReverse :: Int -> U.Vector Int 
 --testBitReverse n = 
@@ -219,8 +222,8 @@ instance (SingI n, SingI (15 + n)) => FFT (Fixed Int16 n Saturated) where
     fft = genericfft False _fftFixed
     ifft = genericfft True _fftFixed
 
-testFFT :: Int -> U.Vector (Complex (Fixed Int16 8 Saturated))
-testFFT n = fft $ (U.fromList . map ((:+ 0) . fromIntegral) $ ([1..(1 `shiftL` n)] ++ [0] :: [Int]))
---
-testFFT1 :: Int -> U.Vector (Complex Double)
-testFFT1 n = U.convert . F.fft . U.convert $  (U.fromList . map ((:+ 0) . fromIntegral) $ ([1..(1 `shiftL` n)] :: [Int]))--
+testFFT :: Int -> Signal Double -> U.Vector (Complex Double)
+testFFT n s = fft . U.map (:+ 0) . takeVectorS n $ s
+
+testFFT1 :: Int -> Signal Double -> U.Vector (Complex Double)
+testFFT1 n s = U.convert . F.fft . U.convert . U.map (:+ 0) . takeVectorS n $ s
