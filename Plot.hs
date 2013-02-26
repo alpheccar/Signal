@@ -219,6 +219,7 @@ instance (Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>
                     let a = h x 
                     drawStringLabel vUnitStyle label a (height - topMargin s + vUnitSep) (leftMargin s) (topMargin s - vUnitSep)
         (prolog s) pt
+        mapM_ drawSignal (zip signals (cycle $ signalStyles s))
         if (axis s) 
             then do 
                 let xaxis = if ta <=0 && tb >=0 then 0 else ta 
@@ -237,5 +238,4 @@ instance (Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>
         when (isJust (title s)) $ do 
             let t = fromJust (title s)
             drawStringLabel titleStyle t (width / 2.0) (height - titleSep) width (topMargin s)
-        mapM_ drawSignal (zip signals (cycle $ signalStyles s))
         (epilog s) pt
