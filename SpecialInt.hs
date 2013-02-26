@@ -16,15 +16,6 @@ import Data.Bits
 type family SuperInt a
 type family BaseValue a
 
-type instance SuperInt Int8  = Int16
-type instance SuperInt Int16 = Int32
-type instance SuperInt Int32 = Int64
-type instance SuperInt Int64 = Integer
-
-type instance SuperInt Word8 = Word16
-type instance SuperInt Word16 = Word32
-type instance SuperInt Word32 = Word64
-
 class SpecialInt a where 
     nbBits :: a -> Int 
     signed :: a -> Bool
@@ -39,6 +30,24 @@ class RawValue a where
     registerMask :: a -> BaseValue a
     fromBaseValue :: BaseValue a -> a
 
+{-
+
+Misc functions
+
+-}
+
+saturate :: (SpecialInt a, Ord (SuperInt a), Num (SuperInt a), Integral (SuperInt a), Integral (BaseValue a), RawValue a) 
+         => a 
+         -> SuperInt a 
+         -> BaseValue a 
+saturate w su | signed w = saturateSigned su 
+              | otherwise = saturateUnsigned su 
+ where
+    saturateSigned su | su > fromIntegral (valueMask w) = valueMask w 
+                      | su < - fromIntegral (valueMask w) = - valueMask w 
+                      | otherwise = fromIntegral su 
+    saturateUnsigned su | su > fromIntegral (registerMask w) = registerMask w 
+                        | otherwise = fromIntegral su
 
 {-
 
@@ -151,6 +160,32 @@ Instance definitions
 
 -}
 
+#define STANDARD_INT(NB,SUPER) \
+type instance SuperInt Int##NB = SUPER; \
+type instance BaseValue Int##NB = Int##NB; \
+instance SpecialInt Int##NB where {\
+    nbBits _ = NB \
+;   signed _ = True \
+;   fromSuper = fromIntegral}; \
+instance RawValue Int##NB where {\
+    baseValue = id \
+;   valueMask = genericMask \
+;   registerMask = genericRegisterMask \
+;   fromBaseValue = id }; \
+
+#define STANDARD_WORD(NB,SUPER) \
+type instance SuperInt Word##NB = SUPER; \
+type instance BaseValue Word##NB = Word##NB; \
+instance SpecialInt Word##NB where {\
+    nbBits _ = NB \
+;   signed _ = False \
+;   fromSuper = fromIntegral}; \
+instance RawValue Word##NB where {\
+    baseValue = id \
+;   valueMask = genericMask \
+;   registerMask = genericRegisterMask \
+;   fromBaseValue = id }; \
+
 #define FAKE_INSTANCES(INT) \
 instance Floating INT where {\
     pi = error ("Floating instance for" ++ #INT ++ "declared only because of Complex of fixed point but has no meaning") \
@@ -230,11 +265,21 @@ instance Eq INT where {\
 instance Show INT where {\
     show ia = show (signExtend ia)};\
 FAKE_INSTANCES(INT)
+
+
 {-
 
 List of instances
 
 -}
+
+STANDARD_INT(16,Int32)
+STANDARD_INT(32,Int64)
+STANDARD_INT(64,Integer)
+
+STANDARD_WORD(16,Word32)
+STANDARD_WORD(32,Word64)
+
 INT_INSTANCES(40,True,Int40,Int64,Integer)
 INT_INSTANCES(128,True,Int128,Integer,Integer)
 INT_INSTANCES(40,False, Word40,Word64,Word64)
