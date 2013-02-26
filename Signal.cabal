@@ -26,6 +26,7 @@ library
     TestCases
     Common
     Windows
+    SpecialInt
   -- other-modules:       
   build-depends:       
      base ==4.6.*,
@@ -38,3 +39,5 @@ library
      test-framework-hunit ==0.3.*,
      HUnit ==1.2.5.*,
      primitive ==0.5.*
+  if (os(darwin))
+    ghc-options: -pgmP llvm-gcc-4.2 -optP-E
