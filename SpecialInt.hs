@@ -106,6 +106,9 @@ genericMask a | s = rs
             ru = (1 `shiftL` nbBits a) - 1
             s = signed a
 
+genericRegisterMask :: (NumberInfo a, Bits (BaseValue a), Num (BaseValue a)) 
+                    => a 
+                    -> BaseValue a
 genericRegisterMask a = (1 `shiftL` nbBits a) - 1
 
 {-
@@ -114,19 +117,32 @@ Functions for Bits
 
 -}
 
+genericShift :: (Bits (BaseValue a), RawValue a, NumberInfo a, Num (BaseValue a), Integral (BaseValue a))
+             => a 
+             -> Int 
+             -> a
 genericShift ia n = fromBaseValue $ ((signExtend ia) `shift` n) .&. (registerMask ia)
 
+genericBit :: (RawValue a, Bits (BaseValue a), NumberInfo a) 
+           => Int 
+           -> a
 genericBit n = r 
  where 
     r = fromBaseValue $ (bit n) .&. registerMask r
 
-x `genericRotate`  i | i<0 && signed x && x<0
-                         = let left = i+nbBits x in
-                           ((x `shift` i) .&. complement ((-1) `shift` left))
-                           .|. (x `shift` left)
-                  | i<0  = (x `shift` i) .|. (x `shift` (i+nbBits x))
-                  | i==0 = x
-                  | i>0  = (x `shift` i) .|. (x `shift` (i-nbBits x))
+genericRotate :: (Ord (BaseValue a), NumberInfo a, RawValue a, Bits (BaseValue a), Num (BaseValue a), Integral (BaseValue a)) 
+              => a 
+              -> Int 
+              -> a
+x1 `genericRotate`  i | i<0 && signed x1 && x<0
+                          = let left = i+nbBits x1 in
+                            fromBaseValue $ (((x `shift` i) .&. complement ((-1) `shift` left))
+                            .|. (x `shift` left)) .&. registerMask x1
+                      | i<0  = fromBaseValue $ ((x `shift` i) .|. (x `shift` (i+nbBits x1))) .&. registerMask x1
+                      | i==0 = fromBaseValue $ x
+                      | i>0  = fromBaseValue $ ((x `shift` i) .|. (x `shift` (i-nbBits x1))) .&. registerMask x1
+ where 
+  x = signExtend x1
 
 {-
 
@@ -329,8 +345,9 @@ List of instances
 -}
 
 -- | Missing big instances required as SuperInt of standard or special format
+-- Those instances cannot be used in fixed point because their super type (Integer)
+-- has no bitwidth
 INT_INSTANCES(256,True, Int256,Integer,Integer)
-INT_INSTANCES(128,False, Word128,Integer,Integer)
 INT_INSTANCES(256,False, Word256,Integer,Integer)
 
 STANDARD_INT(16,Int32)
@@ -342,8 +359,9 @@ STANDARD_WORD(32,Word64)
 STANDARD_WORD(64,Word128)
 
 INT_INSTANCES(40,True,Int40,Int64,Int128)
-INT_INSTANCES(40,False, Word40,Word64,Word64)
+INT_INSTANCES(40,False, Word40,Word64,Word128)
 INT_INSTANCES(128,True,Int128,Integer,Int256)
+INT_INSTANCES(128,False, Word128,Integer,Word256)
 
 type instance Signed Word16 = Int16
 type instance Signed Word32 = Int32

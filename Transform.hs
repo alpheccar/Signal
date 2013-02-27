@@ -38,6 +38,7 @@ import Windows
 import Signal 
 import GHC.TypeLits
 import Foreign.C.Types
+import TypeAddition
 
 --import Debug.Trace
 
@@ -141,25 +142,25 @@ _fft n sign vect = do
         -- Then butterfly 2 for all blocks
         foldM_ forAllBlocks (1 :+ 0) (filter (< step) [0,1..step])
 
-mac ::  (SingI n, SingI (15 + n)) 
-    => Complex (Fixed Int16 15 Saturated)
-    -> Complex (Fixed Int16 n Saturated) 
-    -> Complex (Fixed Int16 n Saturated) 
-    -> Complex (Fixed Int32 (15 + n) Saturated)
+mac ::  (SingI n, SingI r, SingI (15 + n)) 
+    => Complex (Fixed Int16 15 Sat r)
+    -> Complex (Fixed Int16 n Sat r) 
+    -> Complex (Fixed Int16 n Sat r) 
+    -> Complex (Fixed Int32 (15 + n) Sat r)
 mac w y x = fmap convert x + amulc w y
 
-msb ::  (SingI n, SingI (15 + n)) 
-    => Complex (Fixed Int16 15 Saturated)
-    -> Complex (Fixed Int16 n Saturated) 
-    -> Complex (Fixed Int16 n Saturated) 
-    -> Complex (Fixed Int32 (15 + n) Saturated)
+msb ::  (SingI n, SingI r, SingI (15 + n)) 
+    => Complex (Fixed Int16 15 Sat r)
+    -> Complex (Fixed Int16 n Sat r) 
+    -> Complex (Fixed Int16 n Sat r) 
+    -> Complex (Fixed Int32 (15 + n) Sat r)
 msb w y x = fmap convert x - amulc w y
 
 
-_fftFixed :: (SingI n, SingI (15 + n)) 
+_fftFixed :: (SingI n, SingI r, SingI (15 + n)) 
           => Int -- ^ Power of 2
           -> Int
-          -> M.MVector s (Complex (Fixed Int16 n Saturated)) 
+          -> M.MVector s (Complex (Fixed Int16 n Sat r)) 
           -> ST s ()
 _fftFixed n sign vect = do 
     bitReverseA n vect 
@@ -167,8 +168,8 @@ _fftFixed n sign vect = do
     -- For all stages
     forM_ [0..n-1] $ \s -> do 
         let step = 1 `shiftL` s -- Step for the stage
-            w1 = fmap fromDouble . cis $ -pi*fromIntegral sign / fromIntegral step :: Complex (Fixed Int16 15 Saturated)
-            forAllBlocks (w :: Complex (Fixed Int16 15 Saturated) ) b = do 
+            w1 = fmap fromDouble . cis $ -pi*fromIntegral sign / fromIntegral step :: Complex (Fixed Int16 15 Sat r)
+            forAllBlocks (w :: Complex (Fixed Int16 15 Sat r) ) b = do 
                 forM_ (filter (<l) [b,(b + 2*step)..l]) $ \d -> do 
                     let u = d + step 
                     x <- M.read vect d 
@@ -219,7 +220,7 @@ class FFT a where
 
 instance FFT Double 
 
-instance (SingI n, SingI (15 + n)) => FFT (Fixed Int16 n Saturated) where
+instance (SingI n, SingI r, SingI (15 + n)) => FFT (Fixed Int16 n Sat r) where
     fft = genericfft False _fftFixed
     ifft = genericfft True _fftFixed
 

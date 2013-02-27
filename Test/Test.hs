@@ -48,13 +48,13 @@ constSignal = mapS (const 1.0) theTimes
 mySignalA :: Signal Double 
 mySignalA = genericSignal 
 
-mySignalC :: Signal (Fixed Int16 14 Saturated) 
+mySignalC :: Signal (Fixed Int16 14 Sat NR) 
 mySignalC = genericSignal
 
-mySignalD :: Signal (Fixed Int16 3 Saturated) 
+mySignalD :: Signal (Fixed Int16 3 Sat NR) 
 mySignalD = genericSignal
 
-mySignalE:: Signal (Fixed Int16 14 Unsaturated) 
+mySignalE:: Signal (Fixed Int16 14 Unsat NR) 
 mySignalE = genericSignal
 
 mySignalB = mapS (\t -> 0.8*cos (2*pi*getT t*30)*(1.0 + 0.8*cos(2*pi*getT t*10))) theTimes
@@ -91,6 +91,19 @@ pict = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) pl
                                                                                         , AS mySignalE] 
 
 pictwin = display $ discreteSignalsWithStyle ([0..99] :: [Double]) plotStyle [AS win] 
+
+linearSignal :: forall a. Sample a => Signal a 
+linearSignal = mapS (\t -> let x = (fromDouble $ getT t) in x*x) theTimes
+
+linearS :: Signal Double
+linearS = linearSignal
+
+la :: Signal (Fixed Int16 4 Sat NR)
+la = linearSignal
+
+pictramp = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) plotStyle [ AS linearS
+                                                                                            , AS la
+                                                                                            ]
 
 spectruma :: Signal Double
 (freqR,spectruma) = spectrum samplingFrequency duration (noWindow) mySignalA
