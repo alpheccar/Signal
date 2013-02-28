@@ -14,6 +14,8 @@ module Plot(
     , discreteSignalsWithStyle
     , signalsWithStyle
     , display
+    , drawStringLabel
+    , LabelStyle(..)
     ) where 
 
 import Graphics.PDF
@@ -97,6 +99,8 @@ data PlotStyle a b = PlotStyle {
                      , interpolation :: Bool
                      , defaultWidth :: Double 
                      , defaultHeight :: Double
+                     , horizontalBounds :: Maybe (Double,Double)
+                     , verticalBounds :: Maybe (Double,Double)
 }
 
 -- | Default ticks values in [ma,mb]
@@ -131,6 +135,8 @@ defaultPlotStyle = PlotStyle {
                 , signalStyles = repeat (defaultSignalStyle 1.0 (Rgb 0.6 0.6 1.0))
                 , axis = True
                 , interpolation = True
+                , horizontalBounds = Nothing 
+                , verticalBounds = Nothing
 }
 
 -- | Create a plot description with signals and a plot style
@@ -163,10 +169,10 @@ instance (Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>
             hUnitSep = 5
             vUnitSep = 15
             titleSep = 5
-            ta = minimum . map (minimum . map (toDouble . fst)) $ signals 
-            tb = maximum . map (maximum . map (toDouble . fst)) $ signals 
-            ya = minimum . map (minimum . map (toDouble . snd)) $ signals 
-            yb = maximum . map (maximum . map (toDouble . snd))$ signals 
+            (ta,tb) = maybe ( minimum . map (minimum . map (toDouble . fst)) $ signals 
+                            , maximum . map (maximum . map (toDouble . fst)) $ signals) id (horizontalBounds s)
+            (ya,yb) = maybe ( minimum . map (minimum . map (toDouble . snd)) $ signals 
+                            , maximum . map (maximum . map (toDouble . snd))$ signals) id (verticalBounds s) 
             h a = (toDouble a - ta) / (tb - ta)*(width - leftMargin s - rightMargin s) + leftMargin s 
             v b = (toDouble b - ya) / (yb - ya)*(height - topMargin s - bottomMargin s) + bottomMargin s
             pt (a,b) = (h a) :+ (v b)

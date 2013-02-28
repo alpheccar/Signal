@@ -189,7 +189,7 @@ instance Eq a => Eq (Fixed a n sa r) where
 instance Ord a => Ord (Fixed a n sa r) where 
     compare (Fixed a) (Fixed b) = compare a b
 
-type AMulConstraint a b = (Num (BaseValue b), Integral b, Integral (SuperInt b), Num (SuperInt b), Integral a, NumberInfo (SuperInt b), NumberInfo a, NumberInfo b, RawValue b, Num b) 
+type AMulConstraint a b = (Num (BaseValue b), Bits b, Integral b, Integral (SuperInt b), Num (SuperInt b), Integral a, NumberInfo (SuperInt b), NumberInfo a, NumberInfo b, RawValue b, Num b) 
 
 amul :: (SingI na, SingI nb, SingI s, AMulConstraint a b)
      => Fixed a na s r 
@@ -242,7 +242,7 @@ instance Conversion Word16 Word16 where
 instance Conversion Word32 Word32 where
 instance Conversion Word40 Word40 where
 
-genericOperator :: (SingI s, Integral (SuperInt a), Num (BaseValue a), Num (SuperInt a), Integral a, NumberInfo (SuperInt a), NumberInfo a, RawValue a)
+genericOperator :: (SingI s, Bits a, Integral (SuperInt a), Num (BaseValue a), Num (SuperInt a), Integral a, NumberInfo (SuperInt a), NumberInfo a, RawValue a)
                 => (SuperInt a -> SuperInt a -> SuperInt a) 
                 -> Fixed a n s r
                 -> Fixed a n s r
@@ -253,7 +253,7 @@ genericOperator op f@(Fixed a) (Fixed b) =
         in
         Fixed (saturateWithMode f $ op la lb)
 
-genericMulOperator :: (SingI s, SingI n, SingI r, Bits (SuperInt a), Integral (SuperInt a), Num (BaseValue a), Num (SuperInt a), Integral a, NumberInfo (SuperInt a), NumberInfo a, RawValue a)
+genericMulOperator :: (SingI s, SingI n, SingI r, Bits a, Bits (SuperInt a), Integral (SuperInt a), Num (BaseValue a), Num (SuperInt a), Integral a, NumberInfo (SuperInt a), NumberInfo a, RawValue a)
                    => Fixed a n s r
                    -> Fixed a n s r
                    -> Fixed a n s r
@@ -412,7 +412,7 @@ withRounding (Fixed a) = Fixed a
 withNoRounding :: Fixed n s sa r -> Fixed n s sa NR
 withNoRounding (Fixed a) = Fixed a 
 
-genericDiv :: (SingI n, SingI s, NumberInfo (SuperInt a), NumberInfo a, RawValue a, Num (BaseValue a), Integral a, Bits (SuperInt a),Integral (SuperInt a), Num (SuperInt a)) 
+genericDiv :: (SingI n, SingI s, Bits a, NumberInfo (SuperInt a), NumberInfo a, RawValue a, Num (BaseValue a), Integral a, Bits (SuperInt a),Integral (SuperInt a), Num (SuperInt a)) 
            => Fixed a n s r 
            -> Fixed a n s r 
            -> Fixed a n s r 
@@ -434,7 +434,7 @@ class FixedPoint a where
     fromRawValue :: a -> Fixed a n s r 
     toRawValue :: Fixed a n s r -> a
 
-genericFromDouble :: (SingI n, SingI sa, Integral (SuperInt a), FixedPoint a, Num a, Num (BaseValue a), Integral a, NumberInfo (SuperInt a), NumberInfo a, RawValue a) 
+genericFromDouble :: (SingI n, SingI sa, Bits a, Integral (SuperInt a), FixedPoint a, Num a, Num (BaseValue a), Integral a, NumberInfo (SuperInt a), NumberInfo a, RawValue a) 
                   => Double 
                   -> Fixed a n sa r
 genericFromDouble a = let la = saturateWithMode ra (floor (a * 2**(fromIntegral $ nbFractionalBits ra)))

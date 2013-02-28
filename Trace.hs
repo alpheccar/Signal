@@ -19,7 +19,7 @@ import Data.IORef
 import Control.Applicative((<$>))
 import Signal(Signal,mapS,fromListS,takeS)
 import Fixed(Resolution(..))
-import Statistics.Sample.Histogram 
+import Statistics.Sample.KernelDensity 
 import qualified Data.Vector.Unboxed as U 
 import Viewer
 import Plot
@@ -27,6 +27,9 @@ import Graphics.PDF
 import Displayable
 import Internal
 import Control.DeepSeq
+import Text.Printf
+import qualified Graphics.PDF as PDF
+
 
 import qualified Debug.Trace as T
 debug a = T.trace (show a) a
@@ -62,6 +65,7 @@ removeZeroAndLog a b = unzip . map (\(t,x) -> (t, log x)) . filter ((> 0) . snd 
 
 traceValues :: String -> IO ()
 traceValues s = do 
+    let statStyle = LabelStyle 7 LeftJustification PDF.E
     r <- getTrace s
     case r of 
         Nothing -> return ()
@@ -75,12 +79,12 @@ traceValues s = do
                                                         | tb a = triplePartition ta tb la (a:lb) lc h
                                                         | otherwise = triplePartition ta tb la lb (a:lc) h 
                 (negatives, nulls, positives) = triplePartition (<0) (==0) [] [] [] (map toDouble l)
-                positiveSat | null positives = 0 
-                            | otherwise = fromIntegral (length (filter (== ma) positives)) / fromIntegral (length positives)
-                negativeSat | null negatives = 0 
-                            | otherwise = fromIntegral (length (filter (== mi) negatives)) / fromIntegral (length negatives)
-                nullValues | null nulls = 0 
-                           | otherwise = fromIntegral (length nulls) / fromIntegral (length l)
+                positiveSat | null positives = 0 :: Double
+                            | otherwise = 100*fromIntegral (length (filter (== ma) positives)) / fromIntegral (length positives)
+                negativeSat | null negatives = 0 :: Double
+                            | otherwise = 100*fromIntegral (length (filter (== mi) negatives)) / fromIntegral (length negatives)
+                nullValues | null nulls = 0 :: Double
+                           | otherwise = 100*fromIntegral (length nulls) / fromIntegral (length l)
                 drawHist bmi bma l h label theTitle = do
                             let targetLine ptF = do 
                                     withNewContext $ do
@@ -89,18 +93,14 @@ traceValues s = do
                                             (xa :+ ya) = ptF ((log bmi),(-start))
                                             (xb :+ yb) = ptF ((log bma),0)
                                         stroke $ Line  xa ya xb yb
-                                (t,p) = histogram 16  (U.fromList (map log l))
+                                (t,p) = kde_ 32 (log bmi) (log bma) (U.fromList (map log l))
                                 lt' = U.toList t 
                                 lp' = let templ = U.toList p
                                           s = sum templ 
                                       in 
                                       map (/ s) templ
                                 (lt,lp) = removeZeroAndLog lt' lp'
-                                tickv _ _ = 
-                                    let start = (log bma) - (log bmi)
-                                        mav = -start
-                                        mbv = 0.0
-                                    in
+                                tickv mav mbv = 
                                     map (\t -> (fromIntegral t)/(fromIntegral 10)*(mbv-mav) + mav) ([0..10] :: [Int])
                                 tickh _ _ = 
                                     let mav = log bmi 
@@ -115,6 +115,7 @@ traceValues s = do
                                                                , defaultHeight = h
                                                                , epilog = targetLine
                                                                , axis = False
+                                                               , horizontalBounds = Just (log bmi, log bma)
                                                                })  
                             drawing $ discreteSignalsWithStyle lt plotStyle [ AS (fromListS lp)]
             if (signedFormat h) 
@@ -127,9 +128,20 @@ traceValues s = do
                                 pos 
                             withNewContext $ do
                                 neg 
+                            drawStringLabel statStyle ((printf "negatives: %2.3f %%" negativeSat) :: String)
+                                             (leftMargin defaultPlotStyle) 200 100 20
+                            drawStringLabel statStyle ((printf "nulls: %2.3f %%" nullValues) :: String)
+                                             (leftMargin defaultPlotStyle + 200) 200 100 20
+                            drawStringLabel statStyle ((printf "positives: %2.3f %%" positiveSat) :: String)
+                                             (leftMargin defaultPlotStyle + 400) 200 100 20
                     display pict
                 else do
-                    display $ drawHist sm ma positives 400 "unsigned" (Just "Log density of log amplitude")
+                    display $ do 
+                        drawHist sm ma positives 400 "unsigned" (Just "Log density of log amplitude")
+                        drawStringLabel statStyle ((printf "nulls: %2.3f %%" nullValues) :: String)
+                                            (leftMargin defaultPlotStyle) 10 100 20
+                        drawStringLabel statStyle ((printf "positives: %2.3f %%" positiveSat) :: String)
+                                            (leftMargin defaultPlotStyle + 200) 10 100 20
 
 {-# NOINLINE traceSample #-}
 traceSample :: (HasDoubleRepresentation a, Resolution a) => String -> a -> a
@@ -145,11 +157,17 @@ trace :: (HasDoubleRepresentation a, Resolution a)
       -> Signal a 
 trace s = mapS (traceSample s)
 
-forceSignal :: NFData a 
+{-# NOINLINE myTake #-}
+myTake :: NFData a => Int -> [a] -> [a]
+myTake 0 l = []
+myTake i (h:l) = h:myTake (i-1) l
+myTake _ [] = []
+
+{-# NOINLINE forceSignal #-}
+forceSignal :: (NFData a, Show a) 
             => Int 
             -> Signal a 
-            -> IO (Int)
-forceSignal i (Signal s) = 
-    let l = take i s 
-    in 
-    return $ l `deepseq` (length l)
+            -> IO ()
+forceSignal i (Signal s) = do
+    let l = myTake i s
+    l `deepseq` return ()

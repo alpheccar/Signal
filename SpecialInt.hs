@@ -64,7 +64,7 @@ unsignedMask a = (fromBaseValue $ registerMask a)
 signedMask :: (NumberInfo a, RawValue a) => a -> a 
 signedMask a = (fromBaseValue $ valueMask a)
 
-type SaturateConstraint a = (Num a, Integral a, Integral (SuperInt a), NumberInfo (SuperInt a), NumberInfo a,RawValue a, Num (BaseValue a))
+type SaturateConstraint a = (Bits a, Num a, Integral a, Integral (SuperInt a), NumberInfo (SuperInt a), NumberInfo a,RawValue a, Num (BaseValue a))
 
 saturate :: (SaturateConstraint a) 
          => a -- type witness (a cannot be infered from just SuperInt a as SuperInt is not injective)
@@ -75,7 +75,7 @@ saturate w su | s = saturateSigned su
  where
     s = signed w
     saturateSigned su | su > fromIntegral (signedMask w)  = signedMask w
-                      | su < - fromIntegral (signedMask w) = - signedMask w
+                      | su < - (fromIntegral (signedMask w) + 1) = complement (signedMask w)
                       | otherwise = fromIntegral su 
     saturateUnsigned su | su > fromIntegral (unsignedMask w) = unsignedMask w
                         | otherwise = fromIntegral su

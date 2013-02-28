@@ -20,6 +20,12 @@ import qualified Numeric.GSL.Fourier as F
 import Trace
 import System.Random 
 import Displayable
+import Control.DeepSeq
+import Control.Applicative((<$>))
+
+import qualified Debug.Trace as T
+
+debug a = T.trace (show a) a
 
 testa :: Signal Int -> Signal Int
 --testa = map (+11) . map (+23)
@@ -106,10 +112,17 @@ la = linearSignal
 pictramp = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) plotStyle [ AS linearS
                                                                                             , AS la
                                                                                             ]
-randomSig :: (Random a,Sample a, Resolution a) => a -> a -> IO ()
+randomSig :: (Show a, NFData a, Random a,Sample a, Resolution a) => a -> a -> IO ()
 randomSig a b = do 
-    s <- randomSamples a b
-    display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) plotStyle [AS $ trace "test" s]
+    clearTrace
+    let sig = do 
+        s <- randomSamples a b 
+        let g = mapS (\t -> fromDouble (sin (2*pi*getT t))) theTimes
+            r = zipWithS (+) s g 
+        return $ trace "test" r
+    sig >>= forceSignal 4000
+    --s <- sig
+    --display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) plotStyle [AS $ trace "test" s]
 
 spectruma :: Signal Double
 (freqR,spectruma) = spectrum samplingFrequency duration (noWindow) mySignalA
