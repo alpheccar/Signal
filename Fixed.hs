@@ -10,8 +10,11 @@ module Fixed(
       nbFractionalBits
     , HasDoubleRepresentation(..)
     , FixedPoint(..)
+    , Resolution(..)
     , withSaturation 
     , withoutSaturation
+    , withRounding
+    , withNoRounding
     , Fixed
     , Saturation(..)
     , Rounding(..)
@@ -41,6 +44,8 @@ import Control.Monad(liftM)
 import Common(HasDoubleRepresentation(..))
 import Data.Complex
 import SpecialInt 
+import Control.DeepSeq
+import System.Random
 
 import Debug.Trace
 
@@ -279,7 +284,40 @@ genericProperFraction f@(Fixed a) =
   in 
   (fromIntegral b,na)
 
+{-
+ 
+For Random instance
+
+-}       
+
+genericRandomR :: (RandomGen g, Random a, FixedPoint a)
+               => (Fixed a n s r, Fixed a n s r) 
+               -> g 
+               -> (Fixed a n s r, g) 
+genericRandomR (Fixed mi,Fixed ma) g = 
+  let (na,ng) = randomR (mi,ma) g 
+  in 
+  (fromRawValue na,ng)
+
+genericRandom :: (Random (Fixed a n s r),Bounded (Fixed a n s r), RandomGen g, Random a, FixedPoint a) 
+              => g 
+              -> (Fixed a n s r, g)
+genericRandom g = randomR (minBound, maxBound) g
+
+class Resolution a where 
+  smallestValue :: a -> a
+  maxValue :: a -> a 
+  minValue :: a -> a
+  signedFormat :: a -> Bool
+  bitWidth :: a -> Int
+
+
 #define FIXED_INSTANCES(INT) \
+instance NFData (Fixed INT n s r) where {\
+    rnf (Fixed a) = rnf a };\
+instance (SingI n, SingI s, SingI r) => Random (Fixed INT n s r) where {\
+    randomR = genericRandomR \
+;   random = genericRandom }; \
 instance (SingI n, SingI s, SingI r) => Num (Fixed INT n s r) where {\
      (+) = genericOperator (+) \
 ;    (-) = genericOperator (-) \
@@ -287,6 +325,15 @@ instance (SingI n, SingI s, SingI r) => Num (Fixed INT n s r) where {\
 ;    (*) = genericMulOperator \
 ;    signum (Fixed a) = Fixed (signum a) \
 ;    fromInteger = genericFromInteger}; \
+instance (SingI n, SingI s, SingI r) => Bounded (Fixed INT n s r) where {\
+     maxBound = fromRawValue maxBound \
+;    minBound = fromRawValue minBound };\
+instance (SingI n, SingI s, SingI r) => Resolution (Fixed INT n s r) where {\
+     smallestValue _ = fromRawValue 1 \
+;    maxValue _ = maxBound \
+;    minValue _ = minBound \
+;    signedFormat a = signed (toRawValue a)\
+;    bitWidth (Fixed a) = nbBits a};\
 instance FixedPoint INT where {\
      fromRawValue = Fixed \
 ;    toRawValue (Fixed a) = a}; \
@@ -358,6 +405,12 @@ withSaturation (Fixed a) = Fixed a
 
 withoutSaturation :: Fixed n s sa r -> Fixed n s Unsat r
 withoutSaturation (Fixed a) = Fixed a 
+
+withRounding :: Fixed n s sa r -> Fixed n s sa RO
+withRounding (Fixed a) = Fixed a 
+
+withNoRounding :: Fixed n s sa r -> Fixed n s sa NR
+withNoRounding (Fixed a) = Fixed a 
 
 genericDiv :: (SingI n, SingI s, NumberInfo (SuperInt a), NumberInfo a, RawValue a, Num (BaseValue a), Integral a, Bits (SuperInt a),Integral (SuperInt a), Num (SuperInt a)) 
            => Fixed a n s r 

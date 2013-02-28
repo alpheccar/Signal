@@ -27,6 +27,7 @@ library
     Common
     Windows
     SpecialInt
+    Trace
   other-modules:
     TypeAddition 
     Internal
@@ -40,6 +41,10 @@ library
      test-framework ==0.8.*,
      test-framework-hunit ==0.3.*,
      HUnit ==1.2.5.*,
-     primitive ==0.5.*
+     primitive ==0.5.*,
+     containers ==0.5.*,
+     statistics ==0.10.*,
+     deepseq ==1.3.*,
+     random ==1.0.*
   if (os(darwin))
     ghc-options: -pgmP llvm-gcc-4.2 -optP-E

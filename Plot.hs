@@ -26,8 +26,8 @@ import Data.Maybe(isJust,fromJust)
 import Signal
 import Fixed(HasDoubleRepresentation(..))
 
---import Debug.Trace
---debug a = trace (show a) a
+import Debug.Trace
+debug a = trace (show a) a
 
 
 -- | A list fo signals wth style information for the plot and the signals
@@ -95,13 +95,13 @@ data PlotStyle a b = PlotStyle {
                      , signalStyles :: [SignalStyle]
                      , axis :: Bool
                      , interpolation :: Bool
+                     , defaultWidth :: Double 
+                     , defaultHeight :: Double
 }
 
 -- | Default ticks values in [ma,mb]
 tenTicks :: Double -> Double -> [Double]
-tenTicks ma mb = let d = (mb - ma) / 10.0 
-                 in 
-                 [ma,ma+d..mb]
+tenTicks ma mb = map (\t -> (fromIntegral t)/(fromIntegral 10)*(mb-ma) + ma) ([0..10] :: [Int])
 
 -- | Formatting function for floats
 simpleFloat :: HasDoubleRepresentation a => a -> String
@@ -118,6 +118,8 @@ defaultPlotStyle = PlotStyle {
                 , rightMargin = 50 
                 , topMargin = 50 
                 , bottomMargin = 20 
+                , defaultWidth = 600.0 
+                , defaultHeight = 400.0
                 , horizontalTickValues = tenTicks 
                 , verticalTickValues = tenTicks 
                 , horizontalTickRepresentation = simpleFloat
@@ -154,12 +156,12 @@ discreteSignalsWithStyle theTimes' style signals  =
 -- | A plot description is Displayable
 instance (Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>  Displayable (StyledSignal a b) where 
     drawing (StyledSignal signals s) = do 
-        let width = 600.0 
-            height = 400.0
+        let width = defaultWidth s
+            height = defaultHeight s
             tickSize = 6
             tickLabelSep = 5
             hUnitSep = 5
-            vUnitSep = 5
+            vUnitSep = 15
             titleSep = 5
             ta = minimum . map (minimum . map (toDouble . fst)) $ signals 
             tb = maximum . map (maximum . map (toDouble . fst)) $ signals 
@@ -203,13 +205,13 @@ instance (Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>
                 let (sa :+ sb) = pt (x,ya)  
                     (_ :+ eb) = pt (x,yb)
                 stroke $ Line sa sb sa eb
-                mapM_ (drawVTick x) ((verticalTickValues s) ya yb)
+                mapM_ (drawVTick x) (filter (\y -> y >= ya && y <= yb) $ (verticalTickValues s) ya yb)
             drawXAxis y = do 
                 strokeColor black 
                 let (sa :+ sb) = pt (ta,y) 
                     (ea :+ _) = pt (tb,y) 
                 stroke $ Line sa sb ea sb
-                mapM_ (drawHTick y) ((horizontalTickValues s) ta tb)
+                mapM_ (drawHTick y) (filter (\t -> t >= ta && t <= tb) $ (horizontalTickValues s) ta tb)
             drawHLabel _ Nothing = return () 
             drawHLabel y (Just label) = do 
                     let b = v y
@@ -218,8 +220,11 @@ instance (Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>
             drawYLabel x (Just label) = do
                     let a = h x 
                     drawStringLabel vUnitStyle label a (height - topMargin s + vUnitSep) (leftMargin s) (topMargin s - vUnitSep)
-        (prolog s) pt
-        mapM_ drawSignal (zip signals (cycle $ signalStyles s))
+        withNewContext $ do
+            addShape $ Rectangle (leftMargin s :+ bottomMargin s) ((width - rightMargin s) :+ (height - topMargin s))
+            setAsClipPath
+            (prolog s) pt
+            mapM_ drawSignal (zip signals (cycle $ signalStyles s))
         if (axis s) 
             then do 
                 let xaxis = if ta <=0 && tb >=0 then 0 else ta 
@@ -238,4 +243,7 @@ instance (Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>
         when (isJust (title s)) $ do 
             let t = fromJust (title s)
             drawStringLabel titleStyle t (width / 2.0) (height - titleSep) width (topMargin s)
-        (epilog s) pt
+        withNewContext $ do
+            addShape $ Rectangle (leftMargin s :+ bottomMargin s) ((width - rightMargin s) :+ (height - topMargin s))
+            setAsClipPath
+            (epilog s) pt

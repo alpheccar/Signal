@@ -19,11 +19,17 @@ module SpecialInt(
     , Unsigned(..)
     , asSigned 
     , asUnsigned
+    , signExtend
     ) where 
 
 import Data.Int
 import Data.Word
 import Data.Bits
+import Test.Framework(testGroup)
+import Test.Framework.Providers.HUnit(testCase)
+import Test.HUnit.Base
+import Control.DeepSeq
+import System.Random
 
 type family SuperInt a
 type family BaseValue a
@@ -142,7 +148,7 @@ x1 `genericRotate`  i | i<0 && signed x1 && x<0
                       | i==0 = fromBaseValue $ x
                       | i>0  = fromBaseValue $ ((x `shift` i) .|. (x `shift` (i-nbBits x1))) .&. registerMask x1
  where 
-  x = signExtend x1
+  x = baseValue x1
 
 {-
 
@@ -211,9 +217,26 @@ genericCompare ia ib = la `compare` lb
  
 {-
  
-For Show instance
+For Random instance
 
 -}       
+
+genericRandomR :: (Random (BaseValue a),RawValue a, RandomGen g)
+               => (a, a) 
+               -> g 
+               -> (a, g) 
+genericRandomR (mi,ma) g = 
+  let (na,ng) = randomR ((baseValue mi),(baseValue ma)) g 
+  in 
+  (fromBaseValue na,ng)
+
+genericRandom :: (RandomGen g, RawValue a, Random (BaseValue a)) 
+              => g 
+              -> (a, g)
+genericRandom g = 
+  let (na,ng) = random g
+  in 
+  (fromBaseValue na,g)
 
 
 {-
@@ -287,6 +310,11 @@ instance RealFloat INT where { \
 newtype INT = INT {from##INT :: BASEVALUE}; \
 type instance SuperInt INT = SUPERVALUE; \
 type instance BaseValue INT = BASEVALUE; \
+instance Random INT where {\
+    randomR = genericRandomR \
+;   random = genericRandom }; \
+instance NFData INT where {\
+    rnf a = rnf (baseValue a) };\
 instance NumberInfo INT where {\
     nbBits _ = NB \
 ;   signed _ = SIGNED \
