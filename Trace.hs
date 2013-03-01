@@ -65,7 +65,7 @@ removeZeroAndLog a b = unzip . map (\(t,x) -> (t, log x)) . filter ((> 0) . snd 
 
 traceValues :: String -> IO ()
 traceValues s = do 
-    let statStyle = LabelStyle 7 LeftJustification PDF.E
+    let statStyle = LabelStyle 10 Centered PDF.S
     r <- getTrace s
     case r of 
         Nothing -> return ()
@@ -93,13 +93,6 @@ traceValues s = do
                                             (xa :+ ya) = ptF ((log bmi),(-start))
                                             (xb :+ yb) = ptF ((log bma),0)
                                         stroke $ Line  xa ya xb yb
-                                (t,p) = kde_ 32 (log bmi) (log bma) (U.fromList (map log l))
-                                lt' = U.toList t 
-                                lp' = let templ = U.toList p
-                                          s = sum templ 
-                                      in 
-                                      map (/ s) templ
-                                (lt,lp) = removeZeroAndLog lt' lp'
                                 tickv mav mbv = 
                                     map (\t -> (fromIntegral t)/(fromIntegral 10)*(mbv-mav) + mav) ([0..10] :: [Int])
                                 tickh _ _ = 
@@ -117,31 +110,47 @@ traceValues s = do
                                                                , axis = False
                                                                , horizontalBounds = Just (log bmi, log bma)
                                                                })  
-                            drawing $ discreteSignalsWithStyle lt plotStyle [ AS (fromListS lp)]
+                            if null l
+                                then do 
+                                    (return Nothing, const (return ()))
+                                else do
+                                    let (t,p) = kde_ 32 (log bmi) (log bma) (U.fromList (map log l))
+                                        lt' = U.toList t 
+                                        lp' = let templ = U.toList p
+                                                  s = sum templ 
+                                              in 
+                                              map (/ s) templ
+                                        (lt,lp) = removeZeroAndLog lt' lp'
+                                    drawing $ discreteSignalsWithStyle (length lt) plotStyle (fromListS lt)  [ AS (fromListS lp)]
+            let (wi,he) = (\(x,y) -> (fromIntegral x, fromIntegral y)) $ viewerSize 
             if (signedFormat h) 
                 then do
-                    let pos = drawHist sm ma positives 190 "pos" (Just "Log density of log amplitude")
-                        neg = drawHist sm (-mi) (map negate negatives) 190 "neg" Nothing
-                        pict = do
+                    let posD = drawHist sm ma positives (he / 2 - 10) "pos" (Just "Log density of log amplitude")
+                        negD = drawHist sm (-mi) (map negate negatives) (he / 2 - 10) "neg" Nothing
+                        pict = Pair posD negD $ \pos -> \neg -> do
                             withNewContext $ do
-                                applyMatrix $ translate (0 :+ 210)
-                                pos 
+                                applyMatrix $ translate (0 :+ (he/2 + 10))
+                                pos
                             withNewContext $ do
-                                neg 
-                            drawStringLabel statStyle ((printf "negatives: %2.3f %%" negativeSat) :: String)
-                                             (leftMargin defaultPlotStyle) 200 100 20
+                                neg
+                            drawStringLabel statStyle ((printf "negative max: %2.3f %%" negativeSat) :: String)
+                                             (leftMargin defaultPlotStyle + (wi / 4.0))  (he / 2 - 10) 100 20
                             drawStringLabel statStyle ((printf "nulls: %2.3f %%" nullValues) :: String)
-                                             (leftMargin defaultPlotStyle + 200) 200 100 20
-                            drawStringLabel statStyle ((printf "positives: %2.3f %%" positiveSat) :: String)
-                                             (leftMargin defaultPlotStyle + 400) 200 100 20
+                                             (leftMargin defaultPlotStyle + (2.0*wi/4.0)) (he/2 - 10) 100 20
+                            drawStringLabel statStyle ((printf "positive max: %2.3f %%" positiveSat) :: String)
+                                             (leftMargin defaultPlotStyle + (3.0*wi/4.0)) (he/2 - 10) 100 20
                     display pict
                 else do
-                    display $ do 
-                        drawHist sm ma positives 400 "unsigned" (Just "Log density of log amplitude")
-                        drawStringLabel statStyle ((printf "nulls: %2.3f %%" nullValues) :: String)
-                                            (leftMargin defaultPlotStyle) 10 100 20
-                        drawStringLabel statStyle ((printf "positives: %2.3f %%" positiveSat) :: String)
-                                            (leftMargin defaultPlotStyle + 200) 10 100 20
+                        let dD = drawHist sm ma positives (he - 40) "unsigned" (Just "Log density of log amplitude")
+                            pict = Mono dD $ \d -> do
+                                withNewContext $ do
+                                    applyMatrix $ translate (0 :+ 40)
+                                    d
+                                drawStringLabel statStyle ((printf "nulls: %2.3f %%" nullValues) :: String)
+                                                    (leftMargin defaultPlotStyle + wi / 3.0) 10 100 20
+                                drawStringLabel statStyle ((printf "positive max: %2.3f %%" positiveSat) :: String)
+                                                    (leftMargin defaultPlotStyle + (2*wi/3.0)) 10 100 20
+                        display pict
 
 {-# NOINLINE traceSample #-}
 traceSample :: (HasDoubleRepresentation a, Resolution a) => String -> a -> a

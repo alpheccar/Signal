@@ -22,6 +22,7 @@ import System.Random
 import Displayable
 import Control.DeepSeq
 import Control.Applicative((<$>))
+import AudioFile 
 
 import qualified Debug.Trace as T
 
@@ -70,6 +71,27 @@ mySignalB = mapS (\t -> 0.8*cos (2*pi*getT t*30)*(1.0 + 0.8*cos(2*pi*getT t*10))
 win :: Signal Double
 win = fromListS $ map (\i -> tukey 0.3 100 i 1.0) [0..99]
 
+sound = do
+    r <- randomSamples (-0.3) (0.3)
+    let f = Frequency 16000 
+        t = Time (1.0 / getF f)
+        theTimes = uniformSamples t 0.0
+
+        mySignal = zipWithS (+) r (mapS (\t -> sin(2*pi*getT t*4000)*sin(2*pi*0.25*getT t)) theTimes) :: Signal Double
+        mySignal1 = (mapS (\t -> 0.5*sin(2*pi*getT t*4000)*cos(2*pi*0.25*getT t)) theTimes) :: Signal Double
+    writeMono "sound_mono.wav" f 4.0 mySignal1
+    writeStereo "sound_stereo.wav" f 4.0 mySignal mySignal1
+
+bigPict = do 
+    let f = Frequency 16000 
+        tr = Time (1.0 / getF f)
+        theTimes = uniformSamples tr 0.0
+        mySignal = (mapS (\t -> sin(2*pi*getT t*4000)*sin(2*pi*0.25*getT t)) theTimes) :: Signal Double
+
+
+    --print $ takeS 160 mySignal
+    display $ discreteSignalsWithStyle (floor $ getT duration * getF f)  plotStyle (theTimes) [ AS mySignal]
+
 lightBlue = Rgb 0.6 0.6 1.0
 lightRed = Rgb 1.0 0.6 0.6
 lightGreen = Rgb 0.6 1.0 0.6
@@ -93,12 +115,13 @@ fftStyle =
         	                          ]
         	         }
 
-pict = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) plotStyle [ AS mySignalA
-                                                                                        , AS mySignalC
-                                                                                        , AS mySignalD
-                                                                                        , AS mySignalE] 
+pict = display $ discreteSignalsWithStyle (floor $ getT duration * getF samplingFrequency) 
+                                                                      plotStyle theTimes [ AS mySignalA
+                                                                                         , AS mySignalC
+                                                                                         , AS mySignalD
+                                                                                         , AS mySignalE] 
 
-pictwin = display $ discreteSignalsWithStyle ([0..99] :: [Double]) plotStyle [AS win] 
+pictwin = display $ discreteSignalsWithStyle 100 plotStyle (fromListS ([0..99] :: [Double])) [AS win] 
 
 linearSignal :: forall a. Sample a => Signal a 
 linearSignal = mapS (\t -> let x = (fromDouble $ getT t) in x*x) theTimes
@@ -109,9 +132,10 @@ linearS = linearSignal
 la :: Signal (Fixed Int16 4 Sat NR)
 la = linearSignal
 
-pictramp = display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) plotStyle [ AS linearS
-                                                                                            , AS la
-                                                                                            ]
+pictramp = display $ discreteSignalsWithStyle (floor $ getT duration * getF samplingFrequency)
+                                                                      plotStyle theTimes [ AS linearS
+                                                                                         , AS la
+                                                                                         ]
 randomSig :: (Show a, NFData a, Random a,Sample a, Resolution a) => a -> a -> IO ()
 randomSig a b = do 
     clearTrace
@@ -122,7 +146,7 @@ randomSig a b = do
         return $ trace "test" r
     sig >>= forceSignal 4000
     --s <- sig
-    --display $ discreteSignalsWithStyle (takeWhileS (<= duration) theTimes) plotStyle [AS $ trace "test" s]
+    --display $ discreteSignalsWithStyle (floor $ getT duration * getF samplingFrequency) plotStyle theTimes [AS $ trace "test" s]
 
 spectruma :: Signal Double
 (freqR,spectruma) = spectrum samplingFrequency duration (noWindow) mySignalA
@@ -147,7 +171,8 @@ spectrume:: Signal Double
 frequencies :: Signal Frequency
 frequencies = uniformSamples freqR 0.0
 
-pictb = display $ discreteSignalsWithStyle (takeWhileS (<= 100.0) frequencies) fftStyle [ AS spectruma 
+pictb = display $ discreteSignalsWithStyle (floor $ 100.0 / getF freqR) fftStyle 
+                                                                            frequencies [ AS spectruma 
                                                                                         , AS spectrumc 
                                                                                         , AS spectrumd
                                                                                         , AS spectrume]  

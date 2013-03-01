@@ -1,6 +1,7 @@
 dist/
 Test/*.o
 Test/*.hi
+Test/*.wav
 misc.c
 misc.h
 gnucpp

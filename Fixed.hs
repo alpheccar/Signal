@@ -123,24 +123,31 @@ instance (U.Unbox a) => G.Vector U.Vector (Fixed a n s r) where
 
 instance (RealFloat a, U.Unbox a) => U.Unbox (Fixed a n sat r)
 
+{-# INLINE getFract #-}
 getFract :: Fixed a (n :: Nat) sa r -> Sing n -> Integer 
 getFract _ s = fromSing s 
 
+{-# INLINE nbFractionalBits #-}
 nbFractionalBits :: SingI n => Fixed a (n :: Nat) sa r -> Int 
 nbFractionalBits f = fromIntegral $ getFract f sing
 
+{-# INLINE getSaturationMode #-}
 getSaturationMode :: Fixed a n sa r -> Sing sa -> Saturation 
 getSaturationMode _ s = fromSing s 
 
+{-# INLINE saturationMode #-}
 saturationMode :: SingI sa => Fixed a n sa r -> Saturation 
 saturationMode f = getSaturationMode f sing
 
+{-# INLINE getRoundingMode #-}
 getRoundingMode :: Fixed a n s (r :: Rounding) -> Sing r -> Rounding 
 getRoundingMode _ s = fromSing s 
 
+{-# INLINE roundingMode #-}
 roundingMode :: SingI r => Fixed a n sa r -> Rounding
 roundingMode f = getRoundingMode f sing
 
+{-# INLINE saturateWithMode #-}
 saturateWithMode :: (SingI sa, SaturateConstraint a)
                  => Fixed a n sa r
                  -> SuperInt a 
@@ -150,6 +157,7 @@ saturateWithMode f su | saturationMode f == Unsat = fromIntegral su
   where 
     witness (Fixed a) = a
 
+{-# INLINE roundWithMode #-}
 roundWithMode :: (SingI r, Bits b, Ord b, Num b)
               => Fixed a n sa r 
               -> Int 
@@ -158,6 +166,7 @@ roundWithMode :: (SingI r, Bits b, Ord b, Num b)
               -> b 
 roundWithMode f na nb su = rounding (roundingMode f) na nb su
   
+{-# INLINE roundf #-}
 roundf :: (SingI n, SingI r, SingI sa, SaturateConstraint a, Bits (SuperInt a)) 
        => Fixed a n sa r 
        -> Fixed a n sa r 
@@ -166,6 +175,7 @@ roundf f@(Fixed a) =
   in 
   Fixed $ saturateWithMode f (roundWithMode f na 0 (fromIntegral a))
 
+{-# INLINE rounding #-}
 rounding :: (Bits a, Num a, Ord a) 
          => Rounding 
          -> Int -- ^ Current fractional bits 
@@ -191,6 +201,7 @@ instance Ord a => Ord (Fixed a n sa r) where
 
 type AMulConstraint a b = (Num (BaseValue b), Bits b, Integral b, Integral (SuperInt b), Num (SuperInt b), Integral a, NumberInfo (SuperInt b), NumberInfo a, NumberInfo b, RawValue b, Num b) 
 
+{-# INLINE amul #-}
 amul :: (SingI na, SingI nb, SingI s, AMulConstraint a b)
      => Fixed a na s r 
      -> Fixed a nb s r 
@@ -203,6 +214,7 @@ amul fa@(Fixed a) (Fixed b) =
         in
         result
 
+{-# INLINE amulc #-}
 amulc :: (SingI na,SingI nb, SingI s, AMulConstraint a b,Num (Fixed b (na+nb) s r)) 
       => Complex (Fixed a na s r) 
       -> Complex (Fixed a nb s r) 
@@ -210,6 +222,7 @@ amulc :: (SingI na,SingI nb, SingI s, AMulConstraint a b,Num (Fixed b (na+nb) s 
 amulc (xr :+ xi) (yr :+ yi) = (amul xr yr - amul xi yi) :+ (amul xr yi + amul xi yr)
 
 class Conversion a b where 
+  {-# INLINE convert #-}
   convert :: (SingI na, SingI nb, SingI sb, SingI r, Integral a, Bits a, Bits (SuperInt b), NumberInfo a, NumberInfo b, SaturateConstraint b) 
           => Fixed a na sa r
           -> Fixed b nb sb r
@@ -242,6 +255,7 @@ instance Conversion Word16 Word16 where
 instance Conversion Word32 Word32 where
 instance Conversion Word40 Word40 where
 
+{-# INLINE genericOperator #-}
 genericOperator :: (SingI s, Bits a, Integral (SuperInt a), Num (BaseValue a), Num (SuperInt a), Integral a, NumberInfo (SuperInt a), NumberInfo a, RawValue a)
                 => (SuperInt a -> SuperInt a -> SuperInt a) 
                 -> Fixed a n s r
@@ -253,6 +267,7 @@ genericOperator op f@(Fixed a) (Fixed b) =
         in
         Fixed (saturateWithMode f $ op la lb)
 
+{-# INLINE genericMulOperator #-}
 genericMulOperator :: (SingI s, SingI n, SingI r, Bits a, Bits (SuperInt a), Integral (SuperInt a), Num (BaseValue a), Num (SuperInt a), Integral a, NumberInfo (SuperInt a), NumberInfo a, RawValue a)
                    => Fixed a n s r
                    -> Fixed a n s r
@@ -265,9 +280,11 @@ genericMulOperator f@(Fixed a) (Fixed b) =
         in
         Fixed (saturateWithMode f $ r)
 
+{-# INLINE genericAbs #-}
 genericAbs (Fixed a) | a == minBound = Fixed maxBound 
                      | otherwise = Fixed (abs a)
 
+{-# INLINE genericFromInteger #-}
 genericFromInteger a = r
      where 
         b = a `shiftL` (nbFractionalBits r) 
@@ -277,6 +294,7 @@ genericFromInteger a = r
           | b < fromIntegral theMin = Fixed theMin 
           | otherwise = Fixed (fromIntegral b)
 
+{-# INLINE genericProperFraction #-}
 genericProperFraction f@(Fixed a) = 
   let l = nbFractionalBits f 
       b = a `shiftR` l 
@@ -290,6 +308,7 @@ For Random instance
 
 -}       
 
+{-# INLINE genericRandomR #-}
 genericRandomR :: (RandomGen g, Random a, FixedPoint a)
                => (Fixed a n s r, Fixed a n s r) 
                -> g 
@@ -299,6 +318,7 @@ genericRandomR (Fixed mi,Fixed ma) g =
   in 
   (fromRawValue na,ng)
 
+{-# INLINE genericRandom #-}
 genericRandom :: (Random (Fixed a n s r),Bounded (Fixed a n s r), RandomGen g, Random a, FixedPoint a) 
               => g 
               -> (Fixed a n s r, g)
@@ -399,19 +419,23 @@ instance (SingI n, Integral a) => Show (Fixed a n s r) where
         in 
         printf ("%f") ((fromIntegral a)*fr)
 
-
+{-# INLINE withSaturation #-}
 withSaturation :: Fixed n s sa r -> Fixed n s Sat r
 withSaturation (Fixed a) = Fixed a 
 
+{-# INLINE withoutSaturation #-}
 withoutSaturation :: Fixed n s sa r -> Fixed n s Unsat r
 withoutSaturation (Fixed a) = Fixed a 
 
+{-# INLINE withRounding #-}
 withRounding :: Fixed n s sa r -> Fixed n s sa RO
 withRounding (Fixed a) = Fixed a 
 
+{-# INLINE withNoRounding #-}
 withNoRounding :: Fixed n s sa r -> Fixed n s sa NR
 withNoRounding (Fixed a) = Fixed a 
 
+{-# INLINE genericDiv #-}
 genericDiv :: (SingI n, SingI s, Bits a, NumberInfo (SuperInt a), NumberInfo a, RawValue a, Num (BaseValue a), Integral a, Bits (SuperInt a),Integral (SuperInt a), Num (SuperInt a)) 
            => Fixed a n s r 
            -> Fixed a n s r 
@@ -424,6 +448,7 @@ genericDiv f@(Fixed a) (Fixed b) =
         in
         Fixed (saturateWithMode f $ result)
 
+{-# INLINE genericFromRational #-}
 genericFromRational r = 
         let n = numerator r 
             d = denominator r 
@@ -434,6 +459,7 @@ class FixedPoint a where
     fromRawValue :: a -> Fixed a n s r 
     toRawValue :: Fixed a n s r -> a
 
+{-# INLINE genericFromDouble #-}
 genericFromDouble :: (SingI n, SingI sa, Bits a, Integral (SuperInt a), FixedPoint a, Num a, Num (BaseValue a), Integral a, NumberInfo (SuperInt a), NumberInfo a, RawValue a) 
                   => Double 
                   -> Fixed a n sa r
@@ -442,6 +468,7 @@ genericFromDouble a = let la = saturateWithMode ra (floor (a * 2**(fromIntegral 
                       in 
                       ra
 
+{-# INLINE genericToDouble #-}
 genericToDouble :: (SingI n, Integral a) => Fixed a n s r -> Double 
 genericToDouble f@(Fixed a) = fromIntegral a * 2**(- fromIntegral (nbFractionalBits f))
 

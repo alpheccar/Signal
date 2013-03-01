@@ -58,14 +58,17 @@ Misc functions
 
 -}
 
+{-# INLINE unsignedMask #-}
 unsignedMask :: (NumberInfo a, RawValue a) => a -> a 
 unsignedMask a = (fromBaseValue $ registerMask a)
 
+{-# INLINE signedMask #-}
 signedMask :: (NumberInfo a, RawValue a) => a -> a 
 signedMask a = (fromBaseValue $ valueMask a)
 
 type SaturateConstraint a = (Bits a, Num a, Integral a, Integral (SuperInt a), NumberInfo (SuperInt a), NumberInfo a,RawValue a, Num (BaseValue a))
 
+{-# INLINE saturate #-}
 saturate :: (SaturateConstraint a) 
          => a -- type witness (a cannot be infered from just SuperInt a as SuperInt is not injective)
          -> SuperInt a 
@@ -89,6 +92,7 @@ Function for Bounded implementation
 typeWitness :: a -> a 
 typeWitness _ = undefined 
 
+{-# INLINE genericMaxBound #-}
 genericMaxBound :: (NumberInfo a, RawValue a, Num (BaseValue a), Integral (SuperInt a), Bits (SuperInt a), Num (SuperInt a)) => a
 genericMaxBound | s = rs
                 | otherwise = ru
@@ -97,6 +101,7 @@ genericMaxBound | s = rs
               w = typeWitness rs 
               s = signed w
 
+{-# INLINE genericMinBound #-}
 genericMinBound :: (NumberInfo a, RawValue a, Num (BaseValue a), Integral (SuperInt a), Bits (SuperInt a), Num (SuperInt a)) => a
 genericMinBound | s = rs
                 | otherwise = ru
@@ -105,6 +110,7 @@ genericMinBound | s = rs
               w = typeWitness rs -- type witness
               s = signed w
 
+{-# INLINE genericMask #-}
 genericMask :: (NumberInfo a, Bits (BaseValue a), Num (BaseValue a)) => a -> BaseValue a 
 genericMask a | s = rs 
               | otherwise = ru 
@@ -112,6 +118,7 @@ genericMask a | s = rs
             ru = (1 `shiftL` nbBits a) - 1
             s = signed a
 
+{-# INLINE genericRegisterMask #-}
 genericRegisterMask :: (NumberInfo a, Bits (BaseValue a), Num (BaseValue a)) 
                     => a 
                     -> BaseValue a
@@ -123,12 +130,14 @@ Functions for Bits
 
 -}
 
+{-# INLINE genericShift #-}
 genericShift :: (Bits (BaseValue a), RawValue a, NumberInfo a, Num (BaseValue a), Integral (BaseValue a))
              => a 
              -> Int 
              -> a
 genericShift ia n = fromBaseValue $ ((signExtend ia) `shift` n) .&. (registerMask ia)
 
+{-# INLINE genericBit #-}
 genericBit :: (RawValue a, Bits (BaseValue a), NumberInfo a) 
            => Int 
            -> a
@@ -136,6 +145,7 @@ genericBit n = r
  where 
     r = fromBaseValue $ (bit n) .&. registerMask r
 
+{-# INLINE genericRotate #-}
 genericRotate :: (Ord (BaseValue a), NumberInfo a, RawValue a, Bits (BaseValue a), Num (BaseValue a), Integral (BaseValue a)) 
               => a 
               -> Int 
@@ -156,10 +166,15 @@ Functions for Enum
 
 -}
 
+{-# INLINE genericSucc #-}
 genericSucc  i | i == maxBound = error "Can't increase the max bound" 
                | otherwise = fromBaseValue (succ (baseValue i)) 
+
+{-# INLINE genericPred #-}           
 genericPred i  | i == minBound = error "Can't decrease the min bound" 
                | otherwise = fromBaseValue (pred (baseValue i)) 
+
+{-# INLINE genericToEnum #-}
 genericToEnum a = r 
     where 
         r = fromBaseValue $ (toEnum a) .&. valueMask r 
@@ -170,6 +185,7 @@ Functions for Num
 
 -}
 
+{-# INLINE genericFromInteger #-}
 genericFromInteger a | a < 0 = rn
                      | otherwise = rp
         where rp = fromBaseValue $ (fromInteger a) .&. valueMask rp
@@ -181,12 +197,14 @@ Integral instance
 
 -}
 
+{-# INLINE genericQuotRem #-}
 genericQuotRem :: (RawValue a, Integral (BaseValue a)) => a -> a -> (a,a)
 genericQuotRem ia ib = 
     let (q,r) = quotRem (baseValue ia) (baseValue ib) 
     in 
     (fromBaseValue q, fromBaseValue r)
 
+{-# INLINE genericToInteger #-}
 genericToInteger :: (RawValue a, Integral (BaseValue a)) => a -> Integer 
 genericToInteger a = toInteger (baseValue a)
 
@@ -196,6 +214,7 @@ For Ord instance
 
 -}
 
+{-# INLINE signExtend #-}
 signExtend :: (NumberInfo a, Integral (BaseValue a), Num (BaseValue a), Bits (BaseValue a), RawValue a) 
            => a -> BaseValue a
 signExtend a | s = 
@@ -206,6 +225,7 @@ signExtend a | s =
     where 
         s = signed a
 
+{-# INLINE genericCompare #-}
 genericCompare :: (NumberInfo a, RawValue a, Integral (BaseValue a),Bits (BaseValue a),Ord (BaseValue a), Num (BaseValue a)) 
                => a 
                -> a 
@@ -221,6 +241,7 @@ For Random instance
 
 -}       
 
+{-# INLINE genericRandomR #-}
 genericRandomR :: (Random (BaseValue a),RawValue a, RandomGen g)
                => (a, a) 
                -> g 
@@ -230,6 +251,7 @@ genericRandomR (mi,ma) g =
   in 
   (fromBaseValue na,ng)
 
+{-# INLINE genericRandom #-}
 genericRandom :: (RandomGen g, RawValue a, Random (BaseValue a)) 
               => g 
               -> (a, g)
