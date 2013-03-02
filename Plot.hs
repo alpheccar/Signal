@@ -39,7 +39,7 @@ import Control.Monad.ST
 import Control.Monad.Primitive
 import Data.Word
 import Data.Bits
-import Data.List(sortBy,unfoldr)
+import Data.List(sortBy,unfoldr,sort)
 import Data.Function(on)
 
 import Debug.Trace
@@ -230,63 +230,97 @@ instance Functor Complex where
 
 drawLine ::  Point -> PState -> ST s (M.MVector s Word32) 
 drawLine pb@(xb :+ yb) p  = do 
-     mv <- pixels p
-     let maxLen = w p * h p - 1
-         pa@(xa :+ ya) = currentPos p
-         Rgb r g b = currentColor p
-         ri = (floor $ r * 255) .&. 0x0FF 
-         gi = (floor $ g * 255) .&. 0x0FF 
-         bi = (floor $ b * 255) .&. 0x0FF 
-         c = (ri `shift` 16) .|. (gi `shift` 8) .|. bi
-         plotPoint :: M.MVector s Word32 -> (Complex Int) -> ST s ()
-         plotPoint a (x :+ y) | pos >= 0 && pos < maxLen = M.write a pos c
-                              | otherwise = return ()
-            where 
-                pos = w p * (h p - y) + x
- 
+    mv <- pixels p
+    let maxLen = w p * h p - 1
+        pa@(xa :+ ya) = currentPos p
+        Rgb r g b = currentColor p
+        ri = (floor $ r * 255) .&. 0x0FF 
+        gi = (floor $ g * 255) .&. 0x0FF 
+        bi = (floor $ b * 255) .&. 0x0FF 
+        c = (ri `shift` 16) .|. (gi `shift` 8) .|. bi
+        wi = w p 
+        he = h p
+        vertical = floor xb == floor xa 
+        horizontal = floor yb == floor ya
+        {-# INLINE plotPoint #-}
+        plotPoint :: M.MVector s Word32 -> (Complex Int) -> ST s ()
+        plotPoint a (x :+ y) | pos >= 0 && pos < maxLen = M.write a pos c
+                             | otherwise = return ()
+           where 
+               pos = wi * (he - 1 - y) + x
 
-         reversal thep@(x :+ y) | floor xb == floor xa = thep
-                                | floor yb == floor ya = thep
-                                | steep > 1.0 = (y :+ x) 
-                                | otherwise = thep
-                where 
-                    steep = abs ((yb - ya) / (xb - xa))
-         line s e = 
-             let f x = floor x
-                 [s',e'] = sortBy (compare `on` realPart) [s,e]
-                 x0 = f (realPart s')
-                 y0 = f (imagPart s')
+        
+        verticalLine :: M.MVector s Word32 -> Int -> Int -> Int -> ST s () 
+        verticalLine a x yi yj =
+            let [y0,y1] = sort [yi,yj]
+                start | y0 >= 0 = y0 
+                      | otherwise = 0 
+                end | y1 < he = y1
+                    | otherwise = he - 1
+                pts  = [start, start+1..end]
+                pos = wi*(he - 1 -start)+x 
+                allPos = [pos, pos - wi ..]
+                addPoint (p,_) = M.write a p c
+            in 
+            mapM_ addPoint (zip allPos pts)   
 
-                 x1 = f (realPart e')
-                 y1 = f (imagPart e')
+        horizontalLine :: M.MVector s Word32 -> Int -> Int -> Int -> ST s () 
+        horizontalLine a y xi xj =
+            let [x0,x1] = sort [xi,xj]
+                start | x0 >= 0 = x0 
+                      | otherwise = 0 
+                end | x1 < wi = x1
+                    | otherwise = wi - 1
+                pts  = [start, start+1..end]
+                pos = wi*(he - 1 - y)  +  start
+                allPos = [pos, pos + 1 ..]
+                addPoint (p,_) = M.write a p c
+            in 
+            mapM_ addPoint (zip allPos pts)        
 
-                 dx = x1 - x0  :: Int
-                 dy = y1 - y0 :: Int
-                 sy = signum dy
-                 start = x0 :+ y0
-             in
-             if dx == 0
-                then 
-                    if dy == 0 
-                        then [start]
-                        else let vertical thep@(x :+ y) | sy > 0 && y > y1 = Nothing
-                                                        | sy < 0 && y < y1 = Nothing 
-                                                        | otherwise = Just (thep, x :+ (y+sy))
-                             in
-                             start:unfoldr vertical start 
-                else 
-                    let delta = fromIntegral (abs dy) / fromIntegral dx :: Double
-                        step (c@(cx :+ cy),err) | cx > x1 = Nothing
-                                                | newErr > 0.5 = Just (c , ((cx+1) :+ (cy+sy) , newErr - 1.0) )
-                                                | otherwise = Just (c , ((cx +1) :+ cy, newErr))
-                          where 
-                           newErr = err + delta
-                    in 
-                    start:unfoldr step (start,0.0)
-            
-     
-     mapM_ (plotPoint mv . reversal)  $ line (reversal pa) (reversal pb)
-     return mv
+
+        reversal thep@(x :+ y) | floor xb == floor xa = thep
+                               | floor yb == floor ya = thep
+                               | steep > 1.0 = (y :+ x) 
+                               | otherwise = thep
+               where 
+                   steep = abs ((yb - ya) / (xb - xa))
+        line s e = 
+            let f x = floor x
+                [s',e'] = sortBy (compare `on` realPart) [s,e]
+                x0 = f (realPart s')
+                y0 = f (imagPart s')
+                x1 = f (realPart e')
+                y1 = f (imagPart e')
+                dx = x1 - x0  :: Int
+                dy = y1 - y0 :: Int
+                sy = signum dy
+                start = x0 :+ y0
+            in
+            if dx == 0
+               then 
+                   if dy == 0 
+                       then [start]
+                       else let vertical thep@(x :+ y) | sy > 0 && y > y1 = Nothing
+                                                       | sy < 0 && y < y1 = Nothing 
+                                                       | otherwise = Just (thep, x :+ (y+sy))
+                            in
+                            start:unfoldr vertical start 
+               else 
+                   let delta = fromIntegral (abs dy) / fromIntegral dx :: Double
+                       step (c@(cx :+ cy),err) | cx > x1 = Nothing
+                                               | newErr > 0.5 = Just (c , ((cx+1) :+ (cy+sy) , newErr - 1.0) )
+                                               | otherwise = Just (c , ((cx +1) :+ cy, newErr))
+                         where 
+                          newErr = err + delta
+                   in 
+                   start:unfoldr step (start,0.0)
+           
+    let action | vertical =  verticalLine mv (floor xa) (floor ya) (floor yb)
+               | horizontal =  horizontalLine mv (floor ya) (floor xa) (floor xb)
+               | otherwise = mapM_ (plotPoint mv . reversal)  $ line (reversal pa) (reversal pb)
+    action
+    return mv
    
 data PState   =          PState {  currentColor :: !Color 
                                  , currentAlpha :: !Double 
@@ -424,7 +458,11 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                                        --moveTo (0 :+ 0)
                                        --lineTo (100 :+ 100)
                                        --setColor (Rgb 0 0 1.0) 1.0 
-                                       --lineTo (100 :+ 300)
+                                       --moveTo (100 :+ 200)
+                                       --lineTo (200 :+ 200)
+                                       --moveTo (200 :+ 100)
+                                       --lineTo (100 :+ 100)
+                                       
                              return (Just r)
                  | otherwise = return Nothing
         in
