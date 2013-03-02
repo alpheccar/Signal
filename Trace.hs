@@ -105,14 +105,13 @@ traceValues s = do
                                                                , horizontalLabel = Just $ "Log amplitude (" ++ label ++ ")"
                                                                , horizontalTickValues = tickh
                                                                , verticalTickValues = tickv
-                                                               , defaultHeight = h
                                                                , epilog = targetLine
                                                                , axis = False
                                                                , horizontalBounds = Just (log bmi, log bma)
                                                                })  
                             if null l
                                 then do 
-                                    (return Nothing, const (return ()))
+                                    (\_ -> \_ -> return Nothing, \_ -> \_ -> \_ -> return ())
                                 else do
                                     let (t,p) = kde_ 32 (log bmi) (log bma) (U.fromList (map log l))
                                         lt' = U.toList t 

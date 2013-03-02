@@ -112,8 +112,6 @@ data PlotStyle a b = PlotStyle {
                      , signalStyles :: [SignalStyle]
                      , axis :: Bool
                      , interpolation :: Bool
-                     , defaultWidth :: Double 
-                     , defaultHeight :: Double
                      , horizontalBounds :: Maybe (Double,Double)
                      , verticalBounds :: Maybe (Double,Double)
 }
@@ -132,16 +130,12 @@ simpleFloat a =
 -- | Default style for plots
 defaultPlotStyle :: PlotStyle a b 
 defaultPlotStyle = 
-    let (w,h) = viewerSize 
-    in
     PlotStyle {
                 title = Nothing 
               , leftMargin = 50 
               , rightMargin = 50 
               , topMargin = 50 
               , bottomMargin = 20 
-              , defaultWidth = fromIntegral w 
-              , defaultHeight = fromIntegral h
               , horizontalTickValues = tenTicks 
               , verticalTickValues = tenTicks 
               , horizontalTickRepresentation = simpleFloat
@@ -185,7 +179,7 @@ discreteSignalsWithStyle nbPoints style timeSignal signals1  =
     in 
     signalsWithStyle complex theCurves style
 
-type Drawing a = (PDF a, a -> Draw ())
+type Drawing a = (Int -> Int -> PDF a, a -> Int -> Int -> Draw ())
 data Pair a = Pair (Drawing a) (Drawing a) (Draw () -> Draw () -> Draw ())
 data Mono a = Mono (Drawing a) (Draw () -> Draw ())
 
@@ -193,19 +187,22 @@ instance Displayable (Pair a) (a,a) where
    drawing (Pair pa pb c) = 
     let (ra, da) = pa
         (rb, db) = pb 
-        r = do 
-            a <- ra 
-            b <- rb 
+        sep = 20.0 :: Double
+        r = \w -> \h -> do 
+            let h' = floor $ ((fromIntegral h - sep) / 2.0)
+            a <- ra w h'
+            b <- rb w h'
             return (a,b)
-        action = \(a,b) -> do
-           c (da a) (db b) 
+        action = \(a,b) -> \w -> \h -> do
+           let h' = floor ((fromIntegral h - sep) / 2.0)
+           c (da a w h') (db b w h') 
     in 
     (r,action)
 
 instance Displayable (Mono a) a where 
     drawing (Mono pa c) = 
         let (ra,da) = pa 
-            action = c . da 
+            action = \a -> \w -> \h -> c (da a w h)
         in
         (ra, action)
 
@@ -234,9 +231,12 @@ drawLine pb@(xb :+ yb) p  = do
     let maxLen = w p * h p - 1
         pa@(xa :+ ya) = currentPos p
         Rgb r g b = currentColor p
+        alpha = currentAlpha p
+        ri,gi,bi :: Word32
         ri = (floor $ r * 255) .&. 0x0FF 
         gi = (floor $ g * 255) .&. 0x0FF 
         bi = (floor $ b * 255) .&. 0x0FF 
+        c :: Word32
         c = (ri `shift` 16) .|. (gi `shift` 8) .|. bi
         wi = w p 
         he = h p
@@ -244,12 +244,26 @@ drawLine pb@(xb :+ yb) p  = do
         horizontal = floor yb == floor ya
         {-# INLINE plotPoint #-}
         plotPoint :: M.MVector s Word32 -> (Complex Int) -> ST s ()
-        plotPoint a (x :+ y) | pos >= 0 && pos < maxLen = M.write a pos c
+        plotPoint a (x :+ y) | pos >= 0 && pos < maxLen = do 
+                                  old <- M.read a pos
+                                  let new = combineColor old
+                                  M.write a pos new
                              | otherwise = return ()
            where 
                pos = wi * (he - 1 - y) + x
 
-        
+        {-# INLINE combineColor #-}
+        combineColor :: Word32 -> Word32
+        combineColor old = c
+            --let oldr = (old `shiftR` 16) .&. 0x0FF
+            --    oldg = (old `shiftR` 8) .&. 0x0FF
+            --    oldb = old  .&. 0x0FF
+            --    newr = (floor $ fromIntegral oldr*(1-alpha) + fromIntegral ri*alpha) .&. 0x0FF
+            --    newg = (floor $ fromIntegral oldg*(1-alpha) + fromIntegral gi*alpha) .&. 0x0FF
+            --    newb = (floor $ fromIntegral oldb*(1-alpha) + fromIntegral bi*alpha) .&. 0x0FF
+            --    new = (newr `shift` 16) .|. (newg `shift` 8) .|. newb
+            --in 
+            --new
         verticalLine :: M.MVector s Word32 -> Int -> Int -> Int -> ST s () 
         verticalLine a x yi yj =
             let [y0,y1] = sort [yi,yj]
@@ -260,7 +274,10 @@ drawLine pb@(xb :+ yb) p  = do
                 pts  = [start, start+1..end]
                 pos = wi*(he - 1 -start)+x 
                 allPos = [pos, pos - wi ..]
-                addPoint (p,_) = M.write a p c
+                addPoint (p,_) = do 
+                  old <- M.read a p 
+                  let new = combineColor old
+                  M.write a p new
             in 
             mapM_ addPoint (zip allPos pts)   
 
@@ -274,7 +291,10 @@ drawLine pb@(xb :+ yb) p  = do
                 pts  = [start, start+1..end]
                 pos = wi*(he - 1 - y)  +  start
                 allPos = [pos, pos + 1 ..]
-                addPoint (p,_) = M.write a p c
+                addPoint (p,_) = do
+                  old <- M.read a p 
+                  let new = combineColor old
+                  M.write a p new
             in 
             mapM_ addPoint (zip allPos pts)        
 
@@ -389,6 +409,31 @@ getPath s pt l = do
         else do 
             segmentedDraw pt (head l) (tail l)
 
+simplifySignal:: (HasDoubleRepresentation a, Ord b) 
+              => ((a,b) -> Point)
+              -> ([(a,b)],SignalStyle) 
+              -> ([(a,b)],SignalStyle) 
+simplifySignal pt (l,sty) = (simpl s0 v0 v0 (tail l), sty) 
+ where 
+  test (c,x) (a,y) = 
+    let (ta :+ _) = pt (c,x) 
+        (tb :+ _) = pt (a,y) 
+    in 
+    floor ta == floor tb
+
+  getNew l = let (s,v) = head l 
+             in 
+             (s, v)
+  (s0,v0) = getNew l
+  simpl c mi ma [] = (c,mi):(c,ma):[]
+  simpl c mi ma ((a,b):l) | test (c,mi) (a,b) = simpl c (min mi b) (max ma b) l 
+                          | otherwise = 
+                            if null l 
+                               then (c,mi):(c,ma):[] 
+                               else let (s,v) = getNew l 
+                                    in 
+                                    (c,mi):(c,ma):simpl s v v l
+
 drawSignal :: (Canvas c, Show b, Show a) 
            => PlotStyle a b 
            -> ((a,b) -> Point)
@@ -403,76 +448,58 @@ drawSignal s pt (l,signalstyle) = do
 -- | A plot description is Displayable
 instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>  Displayable (StyledSignal a b) (Maybe (PDFReference RawImage)) where 
     drawing (StyledSignal complex signals s) = 
-        let width = defaultWidth s
-            height = defaultHeight s
-            tickSize = 6
-            tickLabelSep = 5
-            hUnitSep = 5
-            vUnitSep = 15
-            titleSep = 5
-            (ta,tb) = maybe ( minimum . map (minimum . map (toDouble . fst)) $ signals 
+        let (ta,tb) = maybe ( minimum . map (minimum . map (toDouble . fst)) $ signals 
                             , maximum . map (maximum . map (toDouble . fst)) $ signals) id (horizontalBounds s)
             (ya,yb) = maybe ( minimum . map (minimum . map (toDouble . snd)) $ signals 
                             , maximum . map (maximum . map (toDouble . snd))$ signals) id (verticalBounds s) 
-            h a = (toDouble a - ta) / (tb - ta)*(width - leftMargin s - rightMargin s) + leftMargin s 
-            v b = (toDouble b - ya) / (yb - ya)*(height - topMargin s - bottomMargin s) + bottomMargin s
-            pt (a,b) = (h a) :+ (v b)
-            drawVTick x y = do 
-                let (a :+ b) = pt (x,y) 
-                stroke $ Line (a - tickSize) b a b
-                drawStringLabel vTickStyle ((verticalTickRepresentation s) y) 
-                     (a - tickSize - tickLabelSep) b (leftMargin s) (bottomMargin s) 
-            drawHTick y x = do 
-                let (a :+ b) = pt (x,y) 
-                stroke $ Line a b a (b - tickSize)
-                drawStringLabel hTickStyle ((horizontalTickRepresentation s) x) 
-                    a (b - tickSize - tickLabelSep) (leftMargin s) (bottomMargin s) 
-            drawYAxis x = do 
-                strokeColor black 
-                let (sa :+ sb) = pt (x,ya)  
-                    (_ :+ eb) = pt (x,yb)
-                stroke $ Line sa sb sa eb
-                mapM_ (drawVTick x) (filter (\y -> y >= ya && y <= yb) $ (verticalTickValues s) ya yb)
-            drawXAxis y = do 
-                strokeColor black 
-                let (sa :+ sb) = pt (ta,y) 
-                    (ea :+ _) = pt (tb,y) 
-                stroke $ Line sa sb ea sb
-                mapM_ (drawHTick y) (filter (\t -> t >= ta && t <= tb) $ (horizontalTickValues s) ta tb)
-            drawHLabel _ Nothing = return () 
-            drawHLabel y (Just label) = do 
-                    let b = v y
-                    drawStringLabel hUnitStyle label (width - rightMargin s + hUnitSep) b  (rightMargin s - hUnitSep) (bottomMargin s) 
-            drawYLabel _ Nothing = return () 
-            drawYLabel x (Just label) = do
-                    let a = h x 
-                    drawStringLabel vUnitStyle label a (height - topMargin s + vUnitSep) (leftMargin s) (topMargin s - vUnitSep)
-        in 
-        let rsrc | complex = do 
-                             let rw = width - leftMargin s -rightMargin s 
-                                 rh = height - topMargin s - bottomMargin s 
-                                 ppt (a,b) = (h a - leftMargin s) :+ (v b - bottomMargin s)
-                             r <- runPixmap (floor rw) (floor rh) $ do
-                                       mapM_ (drawSignal s ppt) (zip signals (cycle $ signalStyles s))
-                                       --setColor (Rgb 1.0 0 0) 1.0 
-                                       --moveTo (0 :+ 0)
-                                       --lineTo (100 :+ 100)
-                                       --setColor (Rgb 0 0 1.0) 1.0 
-                                       --moveTo (100 :+ 200)
-                                       --lineTo (200 :+ 200)
-                                       --moveTo (200 :+ 100)
-                                       --lineTo (100 :+ 100)
-                                       
-                             return (Just r)
-                 | otherwise = return Nothing
-        in
-        (rsrc, \a -> do
+            action myRsrc wi hi = do
+            let width = fromIntegral wi 
+                height = fromIntegral hi
+                tickSize = 6
+                tickLabelSep = 5
+                hUnitSep = 5
+                vUnitSep = 15
+                titleSep = 5
+                
+                h a = (toDouble a - ta) / (tb - ta)*(width - leftMargin s - rightMargin s) + leftMargin s 
+                v b = (toDouble b - ya) / (yb - ya)*(height - topMargin s - bottomMargin s) + bottomMargin s
+                pt (a,b) = (h a) :+ (v b)
+                drawVTick x y = do 
+                    let (a :+ b) = pt (x,y) 
+                    stroke $ Line (a - tickSize) b a b
+                    drawStringLabel vTickStyle ((verticalTickRepresentation s) y) 
+                         (a - tickSize - tickLabelSep) b (leftMargin s) (bottomMargin s) 
+                drawHTick y x = do 
+                    let (a :+ b) = pt (x,y) 
+                    stroke $ Line a b a (b - tickSize)
+                    drawStringLabel hTickStyle ((horizontalTickRepresentation s) x) 
+                        a (b - tickSize - tickLabelSep) (leftMargin s) (bottomMargin s) 
+                drawYAxis x = do 
+                    strokeColor black 
+                    let (sa :+ sb) = pt (x,ya)  
+                        (_ :+ eb) = pt (x,yb)
+                    stroke $ Line sa sb sa eb
+                    mapM_ (drawVTick x) (filter (\y -> y >= ya && y <= yb) $ (verticalTickValues s) ya yb)
+                drawXAxis y = do 
+                    strokeColor black 
+                    let (sa :+ sb) = pt (ta,y) 
+                        (ea :+ _) = pt (tb,y) 
+                    stroke $ Line sa sb ea sb
+                    mapM_ (drawHTick y) (filter (\t -> t >= ta && t <= tb) $ (horizontalTickValues s) ta tb)
+                drawHLabel _ Nothing = return () 
+                drawHLabel y (Just label) = do 
+                        let b = v y
+                        drawStringLabel hUnitStyle label (width - rightMargin s + hUnitSep) b  (rightMargin s - hUnitSep) (bottomMargin s) 
+                drawYLabel _ Nothing = return () 
+                drawYLabel x (Just label) = do
+                        let a = h x 
+                        drawStringLabel vUnitStyle label a (height - topMargin s + vUnitSep) (leftMargin s) (topMargin s - vUnitSep)
             withNewContext $ do
                 addShape $ Rectangle (leftMargin s :+ bottomMargin s) ((width - rightMargin s) :+ (height - topMargin s))
                 setAsClipPath
                 (prolog s) pt
 
-                case a of 
+                case myRsrc of 
                     Nothing -> mapM_ (drawSignal s pt) (zip signals (cycle $ signalStyles s))
                     Just imgref -> do
                         withNewContext $ do
@@ -500,4 +527,27 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                 addShape $ Rectangle (leftMargin s :+ bottomMargin s) ((width - rightMargin s) :+ (height - topMargin s))
                 setAsClipPath
                 (epilog s) pt
-            )
+            
+        in
+        let rsrc wi hi | complex = do 
+                             let rw = fromIntegral wi - leftMargin s - rightMargin s 
+                                 rh = fromIntegral hi - topMargin s - bottomMargin s 
+                                 h a = (toDouble a - ta) / (tb - ta)*rw
+                                 v b = (toDouble b - ya) / (yb - ya)*rh
+                                 ppt (a,b) = h a  :+ v b
+                             r <- runPixmap (floor rw) (floor rh) $ do
+                                       mapM_ (drawSignal s ppt . simplifySignal ppt) $ (zip signals (cycle $ signalStyles s))
+                                       --setColor (Rgb 1.0 0 0) 1.0 
+                                       --moveTo (0 :+ 0)
+                                       --lineTo (100 :+ 100)
+                                       --setColor (Rgb 0 0 1.0) 1.0 
+                                       --moveTo (100 :+ 200)
+                                       --lineTo (200 :+ 200)
+                                       --moveTo (200 :+ 100)
+                                       --lineTo (100 :+ 100)
+                                       
+                             return (Just r)
+                       | otherwise = return Nothing
+        in
+        (rsrc, action)
+

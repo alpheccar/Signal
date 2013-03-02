@@ -7,7 +7,7 @@ module Test(
 	) where 
 
 import Plot
-import Graphics.PDF hiding(Orientation(..))
+import Graphics.PDF hiding(Orientation(..), Vertical)
 import Transform
 import Signal
 import Generators
@@ -105,23 +105,23 @@ lightYellow = Rgb 1.0 1.0 0.6
 
 plotStyle =  
 	(defaultPlotStyle { title = Just "Temporal"
-        	          , signalStyles = [ defaultSignalStyle 1.0 lightBlue
-        	                           , defaultSignalStyle 1.0 lightRed
-        	                           , defaultSignalStyle 1.0 lightGreen
-                                     , defaultSignalStyle 1.0 lightYellow
+        	          , signalStyles = [ defaultSignalStyle 0.8 lightBlue
+        	                           , defaultSignalStyle 0.8 lightRed
+        	                           , defaultSignalStyle 0.8 lightGreen
+                                     , defaultSignalStyle 0.8 lightYellow
         	                           ]
         	          , verticalLabel = Just "Amplitude"
         	          })  
 fftStyle = 
 	plotStyle { verticalLabel = Just "Energy", title = Just "Frequential", horizontalLabel = Just "Hz"
-                     , signalStyles = [ defaultSignalStyle 1.0 lightBlue
-        	                            , defaultSignalStyle 1.0 lightRed
-        	                            , defaultSignalStyle 1.0 lightGreen
-                                      , defaultSignalStyle 1.0 lightYellow
+                     , signalStyles = [ defaultSignalStyle 0.8 lightBlue
+        	                            , defaultSignalStyle 0.8 lightRed
+        	                            , defaultSignalStyle 0.8 lightGreen
+                                      , defaultSignalStyle 0.8 lightYellow
         	                          ]
         	         }
 
-pict = display $ discreteSignalsWithStyle (floor $ getT duration * getF samplingFrequency) 
+pict = discreteSignalsWithStyle (floor $ getT duration * getF samplingFrequency) 
                                                                       plotStyle theTimes [ AS mySignalA
                                                                                          , AS mySignalC
                                                                                          , AS mySignalD
@@ -177,7 +177,7 @@ spectrume:: Signal Double
 frequencies :: Signal Frequency
 frequencies = uniformSamples freqR 0.0
 
-pictb = display $ discreteSignalsWithStyle (floor $ 100.0 / getF freqR) fftStyle 
+pictb = discreteSignalsWithStyle (floor $ 100.0 / getF freqR) fftStyle 
                                                                             frequencies [ AS spectruma 
                                                                                         , AS spectrumc 
                                                                                         , AS spectrumd
