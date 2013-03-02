@@ -92,6 +92,12 @@ bigPict = do
     --print $ takeS 160 mySignal
     display $ discreteSignalsWithStyle (floor $ getT duration * getF f)  plotStyle (theTimes) [ AS mySignal]
 
+wav = do 
+  (s,f) <- readMono "Test.wav" :: IO (Signal Double, Frequency)
+  let tr = Time (1.0 / getF f)
+      theTimes = uniformSamples tr 0.0
+  display $ discreteSignalsWithStyle (floor $ 2.0 * getF f)  plotStyle (theTimes) [ AS s]
+
 lightBlue = Rgb 0.6 0.6 1.0
 lightRed = Rgb 1.0 0.6 0.6
 lightGreen = Rgb 0.6 1.0 0.6

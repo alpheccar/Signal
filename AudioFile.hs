@@ -2,9 +2,10 @@
 module AudioFile(
 	  writeMono
 	, writeStereo
+	, readMono
 	) where 
 
-import Prelude hiding(length,map,zip)
+import Prelude hiding(length,map,zip,head)
 import Data.WAVE 
 import Signal
 import Common
@@ -47,3 +48,12 @@ writeStereo name f duration signall signalr =
 	    w = wave f 2 d samples 
 	in 
 	putWAVEFile name w
+
+readMono :: Sample a 
+         => FilePath 
+         -> IO (Signal a, Frequency)
+readMono name = do
+	w <- getWAVEFile name
+	let f = Frequency (fromIntegral $ waveFrameRate (waveHeader w)) 
+	    s = fromListS . map (fromDouble . sampleToDouble . head)  . waveSamples $ w
+	return (s,f)
