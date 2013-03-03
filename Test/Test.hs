@@ -23,6 +23,8 @@ import Displayable
 import Control.DeepSeq
 import Control.Applicative((<$>))
 import AudioFile 
+import Playable 
+import Viewer(play)
 
 import qualified Debug.Trace as T
 
@@ -97,6 +99,10 @@ wav = do
   let tr = Time (1.0 / getF f)
       theTimes = uniformSamples tr 0.0
   display $ discreteSignalsWithStyle (floor $ 2.0 * getF f)  plotStyle (theTimes) [ AS s]
+
+playWav = do 
+  (s,f) <- readMono "Test.wav" :: IO (Signal Double, Frequency)
+  play ((getF f),(takeS (floor (2 * f)) . mapS toDouble $ s))
 
 lightBlue = Rgb 0.6 0.6 1.0
 lightRed = Rgb 1.0 0.6 0.6

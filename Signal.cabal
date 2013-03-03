@@ -39,7 +39,7 @@ library
      hmatrix ==0.14.*,
      stream-fusion ==0.1.*,
      HPDF ==1.4.*,
-     HaskellViewer ==0.3.*,
+     HaskellViewer ==0.4.*,
      test-framework ==0.8.*,
      test-framework-hunit ==0.3.*,
      HUnit ==1.2.5.*,
