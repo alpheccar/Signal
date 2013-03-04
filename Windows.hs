@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 module Windows(
       hann
     , noWindow
@@ -6,9 +7,57 @@ module Windows(
     , cosine
     , lanczos
     , triangular
+    , cossq
+    , frameWithWinAndOverlap
+    , flattenWithOverlapS
     ) where 
 
+import Prelude hiding(splitAt,(++),concat,zipWith,concatMap,null,head,take)
 import Common
+import Signal
+import Internal
+import Data.List.Stream
+import qualified Data.Vector.Unboxed as U
+import Data.Vector.Unboxed((!),Unbox(..))
+
+frameWithWinAndOverlap :: (Unbox a) 
+                       => Int
+                       -> (Int -> Int -> a -> a) 
+                       -> Int 
+                       -> Signal a 
+                       -> Signal (U.Vector a) 
+frameWithWinAndOverlap winSize winF o (Signal s) = 
+    let frame z = 
+          let (ws,r1) = splitAt (winSize - o) z 
+              (os,r2) = splitAt o r1 
+          in 
+          (U.imap (winF winSize) . U.fromList $ (ws ++ os)) : frame (os ++ r2)
+    in 
+    Signal (frame s)
+
+flattenWithOverlapS :: (Unbox a,Num a) 
+                    => Int 
+                    -> Signal (U.Vector a)
+                    -> Signal a 
+flattenWithOverlapS o s@(Signal l) | null l = Signal []
+                                   | o == 0 = Signal (concatMap U.toList $ l)
+                                   | otherwise = 
+                                      let h = head l 
+                                          n = U.length h
+                                          index = U.fromList [0..o-1]
+                                          _flatten [] = []
+                                          _flatten (a:b:l) = U.toList (U.slice o (n-o) v) : _flatten (b:l)
+                                            where 
+                                              combine b i x | i >= o = x + (b!(i-o))
+                                                            | otherwise = x
+                                              v = U.imap (combine b) a
+                                      in 
+                                      Signal $ (take o . U.toList $ h) ++ (concat . _flatten $ l)
+
+
+cossq m i x = let sq z = z * z 
+              in
+              x* sq(sin(pi*fromIntegral i / fromIntegral (m-1)))
 
 hann :: (Num a, HasDoubleRepresentation a) 
      => Int 

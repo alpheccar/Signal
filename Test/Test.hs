@@ -70,8 +70,9 @@ mySignalE = genericSignal
 
 mySignalB = mapS (\t -> 0.8*cos (2*pi*getT t*30)*(1.0 + 0.8*cos(2*pi*getT t*10))) theTimes
 
-win :: Signal Double
-win = fromListS $ map (\i -> tukey 0.3 100 i 1.0) [0..99]
+winv :: Signal Double
+winv = 
+  fromListS $ map (\i -> cossq 100 i 1.0) [0..99]
 
 sound = do
     r <- randomSamples (-0.3) (0.3)
@@ -102,7 +103,15 @@ wav = do
 
 playWav = do 
   (s,f) <- readMono "Test.wav" :: IO (Signal Double, Frequency)
-  play ((getF f),(takeS (floor (2 * f)) . mapS toDouble $ s))
+  playS (Time 2.0) f s
+
+overlapTest = do 
+  let theTimes = uniformSamples 1 0.0 :: Signal Double
+      s = mapS (\t -> 1.0) theTimes :: Signal Double
+      nb = 1000 
+      s1 = frameWithWinAndOverlap 100 hann 50 $ s
+      s2 = flattenWithOverlapS 50 s1
+  display $ discreteSignalsWithStyle nb plotStyle theTimes [AS s2]
 
 lightBlue = Rgb 0.6 0.6 1.0
 lightRed = Rgb 1.0 0.6 0.6
@@ -133,7 +142,7 @@ pict = discreteSignalsWithStyle (floor $ getT duration * getF samplingFrequency)
                                                                                          , AS mySignalD
                                                                                          , AS mySignalE] 
 
-pictwin = display $ discreteSignalsWithStyle 100 plotStyle (fromListS ([0..99] :: [Double])) [AS win] 
+pictwin = display $ discreteSignalsWithStyle 100 plotStyle (fromListS ([0..99] :: [Double])) [AS winv] 
 
 linearSignal :: forall a. Sample a => Signal a 
 linearSignal = mapS (\t -> let x = (fromDouble $ getT t) in x*x) theTimes

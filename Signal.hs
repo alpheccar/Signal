@@ -1,5 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Signal(
 	Signal,
     Sample(..),
@@ -84,8 +86,10 @@ module Signal(
 
     -- | Vector functions
     takeVectorS,
-    fromVectorS
+    fromVectorS,
 
+    -- | Utility
+    playS 
 
 	) where 
 
@@ -98,9 +102,21 @@ import Data.Vector.Unboxed((!),Unbox(..))
 import Data.Stream(stream,unstream,Stream(..),Step(..),L(..))
 import Data.List.Stream
 import Common(HasDoubleRepresentation(..))
-
+import Playable
+import Common 
+import Viewer(play)
 
 type Sample a = (RealFrac a, RealFloat a, HasDoubleRepresentation a, Unbox a)
+
+instance Sample a => Playable (Time,Frequency, Signal a) where 
+    sound (d,f,s) = (getF f, takeS (P.floor (getT d * getF f) ). mapS toDouble $ s)
+
+playS :: Sample a 
+      => Time 
+      -> Frequency 
+      -> Signal a
+      -> P.IO ()
+playS t f s = play (sound (t,f,s))
 
 headS :: Signal a -> a
 headS (Signal a) = head a
