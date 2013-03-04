@@ -86,7 +86,7 @@ traceValues s = do
                 nullValues | null nulls = 0 :: Double
                            | otherwise = 100*fromIntegral (length nulls) / fromIntegral (length l)
                 drawHist bmi bma l h label theTitle = do
-                            let targetLine ptF = do 
+                            let targetLine (ptF,_) = do 
                                     withNewContext $ do
                                         strokeColor $ Rgb 1.0 0.8 0.8
                                         let start = (log bma) - (log bmi)
@@ -111,7 +111,7 @@ traceValues s = do
                                                                })  
                             if null l
                                 then do 
-                                    (\_ -> \_ -> return Nothing, \_ -> \_ -> \_ -> return ())
+                                    (\_ -> \_ -> return (R Nothing Nothing), \_ -> \_ -> \_ -> return ())
                                 else do
                                     let (t,p) = kde_ 32 (log bmi) (log bma) (U.fromList (map log l))
                                         lt' = U.toList t 

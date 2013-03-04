@@ -20,6 +20,13 @@ module Plot(
     , LabelStyle(..)
     , Pair(..)
     , Mono(..)
+    , Resource(..)
+    , runPixmap
+    , Pixmap(..)
+    , Canvas(..)
+    , PlotCoordinates(..)
+    , PictureCoordinates(..)
+    , CoordinateMapping(..)
     ) where 
 
 import Graphics.PDF
@@ -94,6 +101,10 @@ drawStringLabel (LabelStyle fs j o) s x y w h = do
 defaultSignalStyle :: Double -> Color -> SignalStyle 
 defaultSignalStyle opacity color = SignalStyle color 1.0 opacity
 
+type PictureCoordinates a b = (a,b) -> Point 
+type PlotCoordinates a b = Point -> (a,b)
+type CoordinateMapping a b = (PictureCoordinates a b, PlotCoordinates a b)
+
 -- | Style for a plot
 data PlotStyle a b = PlotStyle {
                        title :: Maybe String 
@@ -107,8 +118,9 @@ data PlotStyle a b = PlotStyle {
                      , verticalTickRepresentation :: Double -> String
                      , horizontalLabel :: Maybe String 
                      , verticalLabel:: Maybe String
-                     , prolog :: ((a,b) -> Point) -> Draw ()
-                     , epilog :: ((a,b) -> Point) -> Draw () 
+                     , prologRsrc :: Int -> Int -> CoordinateMapping a b -> PDF (Maybe (PDFReference RawImage))
+                     , prolog :: Maybe (PDFReference RawImage) -> CoordinateMapping a b -> Draw ()
+                     , epilog :: CoordinateMapping a b -> Draw () 
                      , signalStyles :: [SignalStyle]
                      , axis :: Bool
                      , interpolation :: Bool
@@ -142,7 +154,8 @@ defaultPlotStyle =
               , verticalTickRepresentation = simpleFloat
               , horizontalLabel = Just "s"
               , verticalLabel = Just "Energy"
-              , prolog = const (return ()) 
+              , prologRsrc = \_ -> \_ -> \_ -> return Nothing
+              , prolog = \_ -> \_ -> return ()
               , epilog = const (return ()) 
               , signalStyles = repeat (defaultSignalStyle 1.0 (Rgb 0.6 0.6 1.0))
               , axis = True
@@ -212,10 +225,14 @@ class Monad m => Canvas m where
     setColor :: Color -> Double -> m ()
     resetAlpha :: m ()
     drawPath :: m ()
+    pixel :: Point -> m ()
 
 instance Canvas Draw where 
     moveTo = beginPath 
     lineTo = addLineToPath 
+    pixel p = do
+      beginPath p 
+      addLineToPath p
     setColor c a = do 
         strokeColor c
         setStrokeAlpha a 
@@ -224,6 +241,29 @@ instance Canvas Draw where
 
 instance Functor Complex where 
     fmap f (a :+ b) = f a :+ f b
+
+ppixel :: Point -> PState -> ST s (M.MVector s Word32)
+ppixel pa@(xa :+ ya) p = do 
+  mv <- pixels p 
+  let maxLen = w p * h p - 1
+      Rgb r g b = currentColor p
+      alpha = currentAlpha p
+      ri,gi,bi :: Word32
+      ri = (floor $ r * 255) .&. 0x0FF 
+      gi = (floor $ g * 255) .&. 0x0FF 
+      bi = (floor $ b * 255) .&. 0x0FF 
+      c :: Word32
+      c = (ri `shift` 16) .|. (gi `shift` 8) .|. bi
+      wi = w p 
+      he = h p
+      plotPoint :: M.MVector s Word32 -> (Complex Int) -> ST s ()
+      plotPoint a (x :+ y) | pos >= 0 && pos < maxLen = M.write a pos c
+                           | otherwise = return ()
+         where 
+             pos = wi * (he - 1 - y) + x
+  plotPoint mv (floor xa :+ floor ya)
+  return mv
+
 
 drawLine ::  Point -> PState -> ST s (M.MVector s Word32) 
 drawLine pb@(xb :+ yb) p  = do 
@@ -367,6 +407,10 @@ instance Canvas (Pixmap ) where
        let newPixel = drawLine p s
        in
        s {currentPos = p, pixels = newPixel}
+    pixel p = modify $! \s -> 
+       let newPixel = ppixel p s
+       in
+       s {currentPos = p, pixels = newPixel}
     setColor c a = modify $! \s -> 
        s {currentColor = c, currentAlpha = a}
     drawPath = return ()
@@ -445,89 +489,101 @@ drawSignal s pt (l,signalstyle) = do
     drawPath
     resetAlpha
 
+data Resource = R { plotPixmap :: Maybe  (PDFReference RawImage)
+                  , prologPixmap :: Maybe (PDFReference RawImage)
+                  }
+
 -- | A plot description is Displayable
-instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>  Displayable (StyledSignal a b) (Maybe (PDFReference RawImage)) where 
+instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>  Displayable (StyledSignal a b) Resource where 
     drawing (StyledSignal complex signals s) = 
         let (ta,tb) = maybe ( minimum . map (minimum . map (toDouble . fst)) $ signals 
                             , maximum . map (maximum . map (toDouble . fst)) $ signals) id (horizontalBounds s)
             (ya,yb) = maybe ( minimum . map (minimum . map (toDouble . snd)) $ signals 
                             , maximum . map (maximum . map (toDouble . snd))$ signals) id (verticalBounds s) 
             action myRsrc wi hi = do
-            let width = fromIntegral wi 
-                height = fromIntegral hi
-                tickSize = 6
-                tickLabelSep = 5
-                hUnitSep = 5
-                vUnitSep = 15
-                titleSep = 5
-                
-                h a = (toDouble a - ta) / (tb - ta)*(width - leftMargin s - rightMargin s) + leftMargin s 
-                v b = (toDouble b - ya) / (yb - ya)*(height - topMargin s - bottomMargin s) + bottomMargin s
-                pt (a,b) = (h a) :+ (v b)
-                drawVTick x y = do 
-                    let (a :+ b) = pt (x,y) 
-                    stroke $ Line (a - tickSize) b a b
-                    drawStringLabel vTickStyle ((verticalTickRepresentation s) y) 
-                         (a - tickSize - tickLabelSep) b (leftMargin s) (bottomMargin s) 
-                drawHTick y x = do 
-                    let (a :+ b) = pt (x,y) 
-                    stroke $ Line a b a (b - tickSize)
-                    drawStringLabel hTickStyle ((horizontalTickRepresentation s) x) 
-                        a (b - tickSize - tickLabelSep) (leftMargin s) (bottomMargin s) 
-                drawYAxis x = do 
-                    strokeColor black 
-                    let (sa :+ sb) = pt (x,ya)  
-                        (_ :+ eb) = pt (x,yb)
-                    stroke $ Line sa sb sa eb
-                    mapM_ (drawVTick x) (filter (\y -> y >= ya && y <= yb) $ (verticalTickValues s) ya yb)
-                drawXAxis y = do 
-                    strokeColor black 
-                    let (sa :+ sb) = pt (ta,y) 
-                        (ea :+ _) = pt (tb,y) 
-                    stroke $ Line sa sb ea sb
-                    mapM_ (drawHTick y) (filter (\t -> t >= ta && t <= tb) $ (horizontalTickValues s) ta tb)
-                drawHLabel _ Nothing = return () 
-                drawHLabel y (Just label) = do 
-                        let b = v y
-                        drawStringLabel hUnitStyle label (width - rightMargin s + hUnitSep) b  (rightMargin s - hUnitSep) (bottomMargin s) 
-                drawYLabel _ Nothing = return () 
-                drawYLabel x (Just label) = do
-                        let a = h x 
-                        drawStringLabel vUnitStyle label a (height - topMargin s + vUnitSep) (leftMargin s) (topMargin s - vUnitSep)
-            withNewContext $ do
-                addShape $ Rectangle (leftMargin s :+ bottomMargin s) ((width - rightMargin s) :+ (height - topMargin s))
-                setAsClipPath
-                (prolog s) pt
-
-                case myRsrc of 
-                    Nothing -> mapM_ (drawSignal s pt) (zip signals (cycle $ signalStyles s))
-                    Just imgref -> do
-                        withNewContext $ do
-                                applyMatrix $ translate (leftMargin s :+ bottomMargin s)
-                                drawXObject imgref
-            if (axis s) 
-                then do 
-                    let xaxis = if ta <=0 && tb >=0 then 0 else ta 
-                        yaxis = if ya <=0 && yb >=0 then 0 else ya 
-                    drawXAxis yaxis 
-                    drawYAxis xaxis 
-                    drawHLabel yaxis (horizontalLabel s)
-                    drawYLabel xaxis (verticalLabel s)
-                else do
-                    let xaxis = ta 
-                        yaxis = ya
-                    drawXAxis yaxis 
-                    drawYAxis xaxis
-                    drawHLabel yaxis (horizontalLabel s)
-                    drawYLabel xaxis (verticalLabel s)
-            when (isJust (title s)) $ do 
-                let t = fromJust (title s)
-                drawStringLabel titleStyle t (width / 2.0) (height - titleSep) width (topMargin s)
-            withNewContext $ do
-                addShape $ Rectangle (leftMargin s :+ bottomMargin s) ((width - rightMargin s) :+ (height - topMargin s))
-                setAsClipPath
-                (epilog s) pt
-            
+              let width = fromIntegral wi 
+                  height = fromIntegral hi
+                  tickSize = 6
+                  tickLabelSep = 5
+                  hUnitSep = 5
+                  vUnitSep = 15
+                  titleSep = 5
+                  
+                  h a = (toDouble a - ta) / (tb - ta)*(width - leftMargin s - rightMargin s) + leftMargin s 
+                  v b = (toDouble b - ya) / (yb - ya)*(height - topMargin s - bottomMargin s) + bottomMargin s
+                  pt (a,b) = (h a) :+ (v b)
+                  iw a = fromDouble $ (toDouble a - leftMargin s) / rw * (tb - ta) + ta 
+                    where 
+                      rw = width - leftMargin s - rightMargin s
+                  ih a = fromDouble $ (toDouble a - bottomMargin s) / rh * (yb - ya) + ya
+                    where 
+                      rh = height - topMargin s - bottomMargin s
+                  ippt (a :+ b) = (iw a,ih b)
+                  drawVTick x y = do 
+                      let (a :+ b) = pt (x,y) 
+                      stroke $ Line (a - tickSize) b a b
+                      drawStringLabel vTickStyle ((verticalTickRepresentation s) y) 
+                           (a - tickSize - tickLabelSep) b (leftMargin s) (bottomMargin s) 
+                  drawHTick y x = do 
+                      let (a :+ b) = pt (x,y) 
+                      stroke $ Line a b a (b - tickSize)
+                      drawStringLabel hTickStyle ((horizontalTickRepresentation s) x) 
+                          a (b - tickSize - tickLabelSep) (leftMargin s) (bottomMargin s) 
+                  drawYAxis x = do 
+                      strokeColor black 
+                      let (sa :+ sb) = pt (x,ya)  
+                          (_ :+ eb) = pt (x,yb)
+                      stroke $ Line sa sb sa eb
+                      mapM_ (drawVTick x) (filter (\y -> y >= ya && y <= yb) $ (verticalTickValues s) ya yb)
+                  drawXAxis y = do 
+                      strokeColor black 
+                      let (sa :+ sb) = pt (ta,y) 
+                          (ea :+ _) = pt (tb,y) 
+                      stroke $ Line sa sb ea sb
+                      mapM_ (drawHTick y) (filter (\t -> t >= ta && t <= tb) $ (horizontalTickValues s) ta tb)
+                  drawHLabel _ Nothing = return () 
+                  drawHLabel y (Just label) = do 
+                          let b = v y
+                          drawStringLabel hUnitStyle label (width - rightMargin s + hUnitSep) b  (rightMargin s - hUnitSep) (bottomMargin s) 
+                  drawYLabel _ Nothing = return () 
+                  drawYLabel x (Just label) = do
+                          let a = h x 
+                          drawStringLabel vUnitStyle label a (height - topMargin s + vUnitSep) (leftMargin s) (topMargin s - vUnitSep)
+              withNewContext $ do
+                  addShape $ Rectangle (leftMargin s :+ bottomMargin s) ((width - rightMargin s) :+ (height - topMargin s))
+                  setAsClipPath
+                  let R imgR roR = myRsrc
+                  (prolog s) roR (pt,ippt)
+  
+                  case imgR of 
+                      Nothing  -> mapM_ (drawSignal s pt) (zip signals (cycle $ signalStyles s))
+                      (Just imgref)  -> do
+                          withNewContext $ do
+                                  applyMatrix $ translate (leftMargin s :+ bottomMargin s)
+                                  drawXObject imgref
+              if (axis s) 
+                  then do 
+                      let xaxis = if ta <=0 && tb >=0 then 0 else ta 
+                          yaxis = if ya <=0 && yb >=0 then 0 else ya 
+                      drawXAxis yaxis 
+                      drawYAxis xaxis 
+                      drawHLabel yaxis (horizontalLabel s)
+                      drawYLabel xaxis (verticalLabel s)
+                  else do
+                      let xaxis = ta 
+                          yaxis = ya
+                      drawXAxis yaxis 
+                      drawYAxis xaxis
+                      drawHLabel yaxis (horizontalLabel s)
+                      drawYLabel xaxis (verticalLabel s)
+              when (isJust (title s)) $ do 
+                  let t = fromJust (title s)
+                  drawStringLabel titleStyle t (width / 2.0) (height - titleSep) width (topMargin s)
+              withNewContext $ do
+                  addShape $ Rectangle (leftMargin s :+ bottomMargin s) ((width - rightMargin s) :+ (height - topMargin s))
+                  setAsClipPath
+                  (epilog s) (pt,ippt)
+              
         in
         let rsrc wi hi | complex = do 
                              let rw = fromIntegral wi - leftMargin s - rightMargin s 
@@ -535,6 +591,10 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                                  h a = (toDouble a - ta) / (tb - ta)*rw
                                  v b = (toDouble b - ya) / (yb - ya)*rh
                                  ppt (a,b) = h a  :+ v b
+                                 iw a = fromDouble $ toDouble a /  rw * (tb - ta) + ta 
+                                 ih a = fromDouble $ toDouble a /  rh * (yb - ya) + ya
+                                 ippt (a :+ b) = (iw a,ih b)
+                             pr <- (prologRsrc s) wi hi (ppt,ippt)
                              r <- runPixmap (floor rw) (floor rh) $ do
                                        mapM_ (drawSignal s ppt . simplifySignal ppt) $ (zip signals (cycle $ signalStyles s))
                                        --setColor (Rgb 1.0 0 0) 1.0 
@@ -546,8 +606,18 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                                        --moveTo (200 :+ 100)
                                        --lineTo (100 :+ 100)
                                        
-                             return (Just r)
-                       | otherwise = return Nothing
+                             return $ R (Just r) pr
+                       | otherwise = do 
+                           let rw = fromIntegral wi - leftMargin s - rightMargin s 
+                               rh = fromIntegral hi - topMargin s - bottomMargin s 
+                               h a = (toDouble a - ta) / (tb - ta)*rw
+                               v b = (toDouble b - ya) / (yb - ya)*rh
+                               ppt (a,b) = h a  :+ v b
+                               iw a = fromDouble $ toDouble a /  rw * (tb - ta) + ta 
+                               ih a = fromDouble $ toDouble a /  rh * (yb - ya) + ya
+                               ippt (a :+ b) = (iw a,ih b)
+                           pr <- (prologRsrc s) wi hi (ppt,ippt)
+                           return (R Nothing pr)
         in
         (rsrc, action)
 

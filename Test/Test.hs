@@ -25,6 +25,7 @@ import Control.Applicative((<$>))
 import AudioFile 
 import Playable 
 import Viewer(play)
+import Spectrogram 
 
 import qualified Debug.Trace as T
 
@@ -104,6 +105,23 @@ wav = do
 playWav = do 
   (s,f) <- readMono "Test.wav" :: IO (Signal Double, Frequency)
   playS (Time 2.0) f s
+
+wavSpect = do
+  (s,f) <- readMono "Test.wav" :: IO (Signal Double, Frequency)
+  let tr = Time (1.0 / getF f)
+      theTimes = uniformSamples tr 0.0
+      pict = discreteSignalsWithStyle (floor $ 2.0 * getF f)  plotStyle (theTimes) [ AS s]
+      spect = spectrogram s (Time 2.0) f hann 20
+  display $ Vertical 0 [pict,spect]
+
+debugFFT = do 
+  (s,f) <- readMono "Test.wav" :: IO (Signal Double, Frequency)
+  let duration = Time 1.0
+      (freqR,spectruma) = spectrum f (Time 1.0) (noWindow) s 
+      frequencies = uniformSamples freqR 0.0
+      pictb = discreteSignalsWithStyle (floor $ getF f / getF freqR) fftStyle frequencies [ AS spectruma ]  
+  display pictb
+
 
 overlapTest = do 
   let theTimes = uniformSamples 1 0.0 :: Signal Double
