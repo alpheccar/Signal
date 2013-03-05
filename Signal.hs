@@ -196,8 +196,8 @@ takeS i ls = sb (U.fromList . take i) ls
 dropS :: Int -> Signal t a -> Signal t a
 dropS n ls = ss (drop n) ls
 
-splitAtS :: Unbox a => Int -> Signal t a -> (BSignal t a, Signal t a)
-splitAtS n (Signal r ls) = let (a,b) = splitAt n ls in (BSignal r (U.fromList a), Signal r b) 
+splitAtS :: Int -> Signal t a -> ([a], Signal t a)
+splitAtS n (Signal r ls) = let (a,b) = splitAt n ls in (a, Signal r b) 
  
 takeWhileS :: Unbox a => (a -> Bool) -> Signal t a -> BSignal t a
 takeWhileS p xs0   = sb (U.fromList . takeWhile p) xs0
@@ -205,13 +205,13 @@ takeWhileS p xs0   = sb (U.fromList . takeWhile p) xs0
 dropWhileS :: Unbox a => (a -> Bool) -> Signal t a -> BSignal t a
 dropWhileS p xs0   = sb (U.fromList . dropWhile p) xs0
 
-spanS :: Unbox a => (a -> Bool) -> Signal t a -> (BSignal t a,Signal t a)
+spanS :: (a -> Bool) -> Signal t a -> ([a],Signal t a)
 spanS p (Signal r xs0)        = let (b,s) = span p xs0
-                                in (BSignal r (U.fromList b), Signal r s)
+                                in (b, Signal r s)
 
-breakS :: Unbox a => (a -> Bool) -> Signal t a -> (BSignal t a,Signal t a)
+breakS :: (a -> Bool) -> Signal t a -> ([a], Signal t a)
 breakS p (Signal r xs0)     = let (b,s) = break p xs0
-                              in (BSignal r (U.fromList b), Signal r s)
+                              in (b, Signal r s)
 
 isPrefixOfS :: (Eq a, Unbox a) => BSignal t a -> Signal t a -> Bool
 isPrefixOfS p s = so (isPrefixOf (toListBS p))  s
@@ -237,9 +237,9 @@ genericTakeS nb s = sb (U.fromList . genericTake nb) s
 genericDropS :: (Integral i) => i -> Signal t a -> Signal t a
 genericDropS nb s = ss (genericDrop nb) s
 
-genericSplitAtS :: (Unbox a,Integral i) => i -> Signal t a -> (BSignal t a, Signal t a)
+genericSplitAtS :: (Integral i) => i -> Signal t a -> ([a], Signal t a)
 genericSplitAtS i (Signal r a) = let (b,s) = genericSplitAt i a
-                                 in (BSignal r (U.fromList b), Signal r s)
+                                 in (b, Signal r s)
 
 genericReplicateS :: Integral i => t -> i -> a -> Signal t a
 genericReplicateS r n x = os r (genericReplicate n x)

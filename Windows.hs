@@ -38,41 +38,45 @@ import Data.Vector.Unboxed((!),Unbox(..))
 --    in 
 --    frame s
 
-frameWithWinAndOverlap :: (Unbox a) 
+frameWithWinAndOverlap :: (Unbox a, Fractional t) 
                        => Int
-                       -> (Int -> Int -> a -> a) 
                        -> Int 
+                       -> (Int -> Int -> a -> a) 
                        -> Signal t a 
                        -> Signal t (U.Vector a) 
-frameWithWinAndOverlap winSize winF o si@(Signal r s) = 
-    let frame z = 
+frameWithWinAndOverlap winSize o winF si@(Signal r s) = 
+    let r' = r * fromIntegral (winSize - o)
+        frame z = 
           let (ws,r1) = splitAtS (winSize - o) z 
               (os,r2) = splitAtS o r1 
-              h = toVectorBS . imapBS (winF winSize) $ (appendBS ws  os)
+              h = U.imap (winF winSize) . U.fromList . (ws ++) .  (os ++) $ []
           in 
           h:(frame r1)
     in 
-    Signal r (frame si)
+    Signal r' (frame si)
 
 
-flattenWithOverlapS :: (Unbox a,Num a) 
-                    => Int 
+flattenWithOverlapS :: (Unbox a,Num a, Fractional t) 
+                    => Int
+                    -> Int 
                     -> Signal t (U.Vector a)
                     -> Signal t a 
-flattenWithOverlapS o s@(Signal r l) | null l = error "A signal can't be empty : in flattenWithOverlapS"
-                                     | o == 0 = concatMapS U.toList s
-                                     | otherwise = 
-                                          let h = headS s 
-                                              n = U.length h
-                                              index = U.fromList [0..o-1]
-                                              _flatten [] = []
-                                              _flatten (a:b:l) = U.toList (U.slice o (n-o) v) : _flatten (b:l)
-                                                where 
-                                                  combine b i x | i >= o = x + (b!(i-o))
-                                                                | otherwise = x
-                                                  v = U.imap (combine b) a
-                                          in 
-                                          appendListS (take o . U.toList $ h) (concatS . onSamples _flatten $ s)
+flattenWithOverlapS winSize o s@(Signal r l) | null l = error "A signal can't be empty : in flattenWithOverlapS"
+                                             | o == 0 = concatMapS U.toList s
+                                             | otherwise = 
+                                                  let r' = r / fromIntegral (winSize - o)
+                                                      h = headS s 
+                                                      n = U.length h
+                                                      index = U.fromList [0..o-1]
+                                                      _flatten [] = []
+                                                      _flatten (a:b:l) = U.toList (U.slice o (n-o) v) : _flatten (b:l)
+                                                        where 
+                                                          combine b i x | i >= o = x + (b!(i-o))
+                                                                        | otherwise = x
+                                                          v = U.imap (combine b) a
+                                                      Signal _ news = appendListS (take o . U.toList $ h) (concatS . onSamples _flatten $ s)
+                                                  in 
+                                                  Signal r' news
 
 
 cossq m i x = let sq z = z * z 

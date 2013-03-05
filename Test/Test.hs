@@ -25,6 +25,7 @@ import AudioFile
 import Playable 
 import Viewer(play)
 import Spectrogram 
+import VAD
 
 import qualified Debug.Trace as T
 
@@ -103,13 +104,17 @@ playWav = do
   s <- readMono "Test.wav" :: IO (Signal Time Double)
   playS (Time 2.0) s
 
+
 -- PROBLEM
 wavSpect = do
   s <- readMono "Test.wav" :: IO (Signal Time Double)
   let tr = dual (samplingRate s)
       theTimes = uniformSamples tr 0.0
-      pict = discreteSignalsWithStyle (floor $ 2.0 * getF (samplingRate s))  plotStyle (theTimes) [ AS s]
-      spect = spectrogram s (Time 2.0) hann 20
+      spect = spectrogram s (Time 6.0) hann 20
+      v = vad s
+      theFrames = uniformSamples (samplingPeriod v) 0
+      pict = discreteSignalsWithStyle (floor $ 6.0 * getF (samplingRate s))  plotStyle (theTimes) [ AS s]
+      --pictv = discreteSignalsWithStyle (floor $ 4.0 * getF (samplingRate v))  (plotStyle {title = Just "VAD"}) (theFrames) [ AS v]
   display $ Vertical 0 [pict,spect]
 
 debugFFT = do 
@@ -127,8 +132,8 @@ overlapTest = do
   let theTimes = uniformSamples 1 0.0 :: Signal Time Time
       s = mapS (\t -> 1.0) theTimes :: Signal Time Double
       nb = 1000 
-      s1 = frameWithWinAndOverlap 100 hann 50 $ s
-      s2 = flattenWithOverlapS 50 s1
+      s1 = frameWithWinAndOverlap 100 50 hann  $ s
+      s2 = flattenWithOverlapS 100 50 s1
   display $ discreteSignalsWithStyle nb plotStyle theTimes [AS s2]
 
 lightBlue = Rgb 0.6 0.6 1.0

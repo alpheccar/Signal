@@ -72,9 +72,9 @@ spectrogram signal duration window overlap =
         winExp = 8
         winSize = 1 `shiftL` winExp
         freqResolution = (getF samplingF) / fromIntegral winSize
-        frames = frameWithWinAndOverlap winSize window overlap signal
+        frames = frameWithWinAndOverlap winSize overlap window signal
         nbFrames :: Int
-        nbFrames = (floor (getT duration * getF samplingF / fromIntegral (winSize - overlap)))
+        nbFrames = (floor (getT duration * getF (samplingRate frames)))
         listOfSpectra = take nbFrames . getSamples . mapS (U.slice 0 (winSize `shiftR` 1)) . 
                         mapS (_spectrum winExp (1.0 / getF samplingF)) $ frames 
         theSpectrum = U.concat listOfSpectra
