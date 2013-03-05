@@ -168,23 +168,23 @@ defaultPlotStyle =
 signalsWithStyle :: Bool -> [[(a,b)]] -> PlotStyle a b -> StyledSignal a b 
 signalsWithStyle c signals style = StyledSignal c signals style
 
-data AnySignal = forall b. HasDoubleRepresentation b => AS (Signal b) 
+data AnySignal t = forall b. HasDoubleRepresentation b => AS (Signal t b) 
 
 -- | Create a plot description with discrete signals and a plot style
 discreteSignalsWithStyle :: HasDoubleRepresentation t 
                          => Int
                          -> PlotStyle Double Double 
-                         -> Signal t
-                         -> [AnySignal] 
+                         -> Signal t t
+                         -> [AnySignal t] 
                          -> StyledSignal Double Double
 discreteSignalsWithStyle nbPoints style timeSignal signals1  = 
     let theTimes2 = mapS toDouble timeSignal
         reduce = (nbPoints `quot` maximumPoints) - 1 
         nbPointsToDraw = nbPoints 
         theTimes = theTimes2 
-        convertSignal :: AnySignal -> Signal Double
+        convertSignal :: AnySignal t -> Signal t Double
         convertSignal (AS s) = mapS toDouble s        
-        timedSignal s = takeS nbPointsToDraw . zipS theTimes $ (convertSignal s)
+        timedSignal s = toListBS . takeS nbPointsToDraw . zipS theTimes $ (convertSignal s)
         theCurves :: [[(Double,Double)]]
         theCurves = map timedSignal signals1
         --complex = True

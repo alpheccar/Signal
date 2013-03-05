@@ -14,6 +14,7 @@ import Transform
 import Graphics.PDF
 import Plot
 import Control.Applicative((<$>))
+import Data.List(foldl1')
 
 import Debug.Trace 
 
@@ -50,7 +51,7 @@ genPicture value w h (plotToPixel, pixelToPlot) = Just <$> do
     runPixmap w h $ do
         let drawValue p = do
             let pl = pixelToPlot p
-                v = value pl 
+                v = log (1 + value pl) / log 2.0 
                 col = Rgb v 0 0
             setColor col 1.0 
             pixel p
@@ -60,22 +61,30 @@ genPicture value w h (plotToPixel, pixelToPlot) = Just <$> do
 -- We display only up to sampling frequency / 2 because the spectrum is even.
 -- So, it allow a zooming a the frequency that matters instead of displaying redudant information
 spectrogram :: (Sample a, Show a) 
-            => Signal a 
+            => Signal Time a 
             -> Time
-            -> Frequency
             -> (Int -> Int -> a -> a)
             -> Int 
             -> StyledSignal Double Double
-spectrogram signal duration samplingF window overlap = 
-    let winSize :: Int
+spectrogram signal duration window overlap = 
+    let samplingF = samplingRate signal
+        winSize :: Int
         winExp = 8
         winSize = 1 `shiftL` winExp
         freqResolution = (getF samplingF) / fromIntegral winSize
         frames = frameWithWinAndOverlap winSize window overlap signal
         nbFrames :: Int
-        nbFrames = (floor (getT duration * getF samplingF / fromIntegral winSize))
-        theSpectrum = U.concat . takeS nbFrames . mapS (U.slice 0 (winSize `shiftR` 1)) . mapS (_spectrum winExp (1.0 / getF samplingF)) $ frames 
+        nbFrames = (floor (getT duration * getF samplingF / fromIntegral (winSize - overlap)))
+        listOfSpectra = take nbFrames . getSamples . mapS (U.slice 0 (winSize `shiftR` 1)) . 
+                        mapS (_spectrum winExp (1.0 / getF samplingF)) $ frames 
+        theSpectrum = U.concat listOfSpectra
+                      
         thePeak = U.maximum theSpectrum
+        energyLocation = foldl1' (U.zipWith max)  listOfSpectra
+        (lowest,_) = U.span (<= thePeak * 0.1) energyLocation 
+        (highest,_) = U.span (<= thePeak * 0.1) (U.reverse energyLocation)
+        startFrequency = fromIntegral (U.length lowest) / fromIntegral winSize * getF samplingF
+        stopFrequency = fromIntegral (U.length energyLocation - U.length highest) / fromIntegral winSize * getF samplingF
         normalizedSpectrum = U.map (/ thePeak) theSpectrum
         totalElements = U.length normalizedSpectrum
         value (i,j) = 
@@ -90,7 +99,7 @@ spectrogram signal duration samplingF window overlap =
         bottom = bottomMargin (defaultPlotStyle)
         style = defaultPlotStyle { title = Just "Spectrogram"
                                  , horizontalBounds = Just (0, fromIntegral nbFrames)
-                                 , verticalBounds = Just (0,getF samplingF / 2.0)
+                                 , verticalBounds = Just (startFrequency,stopFrequency)
                                  , prolog = prologSpect left bottom
                                  , prologRsrc = genPicture value
                                  , horizontalLabel = Just "frame"

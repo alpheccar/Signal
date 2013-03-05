@@ -2,8 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 module Test(
 	  testa
-	, test1
-	, test2
+	
 	) where 
 
 import Plot
@@ -31,101 +30,102 @@ import qualified Debug.Trace as T
 
 debug a = T.trace (show a) a
 
-testa :: Signal Int -> Signal Int
+testa :: Signal t Int -> Signal t Int
 --testa = map (+11) . map (+23)
 testa =  mapS (+11) . mapS (+23) 
 
-test1 = takeS 10  . testa $ fromListS ([1..] :: [Int])
-test2 = takeS 11  . consS 26 . testa $ fromListS ([1..] :: [Int])
 
+dr :: Time
+dr = 4.0
 
-duration :: Time
-duration = 4.0
-
-samplingPeriod :: Time 
-samplingPeriod = Time 0.01
+sp :: Time 
+sp = Time 0.01
 
 samplingFrequency :: Frequency 
 samplingFrequency = Frequency (1.0 / 0.01)
 
-theTimes = uniformSamples samplingPeriod 0.0
+theTimes :: Signal Time Time
+theTimes = uniformSamples sp 0.0
 
 -- | This signal is working for any type with a Double representation
-genericSignal :: forall a. Sample a => Signal a
+genericSignal :: forall a. Sample a => Signal Time a
 genericSignal = mapS (\t ->  2*(fromDouble $ 1.5*sin (2*pi*getT t) + 0.4*sin(2*pi*20*getT t))) theTimes
 
-constSignal :: Signal Double
+constSignal :: Signal Time Double
 constSignal = mapS (const 1.0) theTimes 
 
-mySignalA :: Signal Double 
+mySignalA :: Signal Time Double 
 mySignalA = genericSignal 
 
-mySignalC :: Signal (Fixed Int16 14 Sat NR) 
+mySignalC :: Signal Time (Fixed Int16 14 Sat NR) 
 mySignalC = genericSignal
 
-mySignalD :: Signal (Fixed Int16 3 Sat NR) 
+mySignalD :: Signal Time (Fixed Int16 3 Sat NR) 
 mySignalD = genericSignal
 
-mySignalE:: Signal (Fixed Int16 14 Unsat NR) 
+mySignalE:: Signal Time (Fixed Int16 14 Unsat NR) 
 mySignalE = genericSignal
 
 mySignalB = mapS (\t -> 0.8*cos (2*pi*getT t*30)*(1.0 + 0.8*cos(2*pi*getT t*10))) theTimes
 
-winv :: Signal Double
+winv :: Signal Int Double
 winv = 
-  fromListS $ map (\i -> cossq 100 i 1.0) [0..99]
+  fromListS 1 $ map (\i -> cossq 100 i 1.0) [0..99]
 
-sound = do
-    r <- randomSamples (-0.3) (0.3)
+soundTest = do
     let f = Frequency 16000 
-        t = Time (1.0 / getF f)
+        t = dual f
         theTimes = uniformSamples t 0.0
+    r <- randomSamples t (-0.3) (0.3)
 
-        mySignal = zipWithS (+) r (mapS (\t -> sin(2*pi*getT t*4000)*sin(2*pi*0.25*getT t)) theTimes) :: Signal Double
-        mySignal1 = (mapS (\t -> 0.5*sin(2*pi*getT t*4000)*cos(2*pi*0.25*getT t)) theTimes) :: Signal Double
-    writeMono "sound_mono.wav" f 4.0 mySignal1
-    writeStereo "sound_stereo.wav" f 4.0 mySignal mySignal1
+    let mySignal = zipWithS (+) r (mapS (\t -> sin(2*pi*getT t*4000)*sin(2*pi*0.25*getT t)) theTimes) :: Signal Time Double
+        mySignal1 = (mapS (\t -> 0.5*sin(2*pi*getT t*4000)*cos(2*pi*0.25*getT t)) theTimes) :: Signal Time Double
+    writeMono "sound_mono.wav" 4.0 mySignal1
+    writeStereo "sound_stereo.wav" 4.0 mySignal mySignal1
 
 bigPict = do 
     let f = Frequency 16000 
-        tr = Time (1.0 / getF f)
+        tr = dual f
         theTimes = uniformSamples tr 0.0
-        mySignal = (mapS (\t -> sin(2*pi*getT t*4000)*sin(2*pi*0.25*getT t)) theTimes) :: Signal Double
+        mySignal = (mapS (\t -> sin(2*pi*getT t*4000)*sin(2*pi*0.25*getT t)) theTimes) :: Signal Time Double
 
 
     --print $ takeS 160 mySignal
-    display $ discreteSignalsWithStyle (floor $ getT duration * getF f)  plotStyle (theTimes) [ AS mySignal]
+    display $ discreteSignalsWithStyle (floor $ getT dr * getF f)  plotStyle (theTimes) [ AS mySignal]
 
 wav = do 
-  (s,f) <- readMono "Test.wav" :: IO (Signal Double, Frequency)
-  let tr = Time (1.0 / getF f)
+  s <- readMono "Test.wav" :: IO (Signal Time Double)
+  let tr = dual (samplingRate s)
       theTimes = uniformSamples tr 0.0
-  display $ discreteSignalsWithStyle (floor $ 2.0 * getF f)  plotStyle (theTimes) [ AS s]
+  display $ discreteSignalsWithStyle (floor $ 2.0 * getF (samplingRate s))  plotStyle (theTimes) [ AS s]
 
 playWav = do 
-  (s,f) <- readMono "Test.wav" :: IO (Signal Double, Frequency)
-  playS (Time 2.0) f s
+  s <- readMono "Test.wav" :: IO (Signal Time Double)
+  playS (Time 2.0) s
 
+-- PROBLEM
 wavSpect = do
-  (s,f) <- readMono "Test.wav" :: IO (Signal Double, Frequency)
-  let tr = Time (1.0 / getF f)
+  s <- readMono "Test.wav" :: IO (Signal Time Double)
+  let tr = dual (samplingRate s)
       theTimes = uniformSamples tr 0.0
-      pict = discreteSignalsWithStyle (floor $ 2.0 * getF f)  plotStyle (theTimes) [ AS s]
-      spect = spectrogram s (Time 2.0) f hann 20
+      pict = discreteSignalsWithStyle (floor $ 2.0 * getF (samplingRate s))  plotStyle (theTimes) [ AS s]
+      spect = spectrogram s (Time 2.0) hann 20
   display $ Vertical 0 [pict,spect]
 
 debugFFT = do 
-  (s,f) <- readMono "Test.wav" :: IO (Signal Double, Frequency)
-  let duration = Time 1.0
-      (freqR,spectruma) = spectrum f (Time 1.0) (noWindow) s 
+  s <- readMono "Test.wav" :: IO (Signal Time Double)
+  let dr = Time 1.0
+      spectruma = spectrum (Time 1.0) (noWindow) s 
+      freqR = samplingPeriod spectruma 
+      f = samplingRate s
       frequencies = uniformSamples freqR 0.0
       pictb = discreteSignalsWithStyle (floor $ getF f / getF freqR) fftStyle frequencies [ AS spectruma ]  
   display pictb
 
-
+-- PROBLEM
 overlapTest = do 
-  let theTimes = uniformSamples 1 0.0 :: Signal Double
-      s = mapS (\t -> 1.0) theTimes :: Signal Double
+  let theTimes = uniformSamples 1 0.0 :: Signal Time Time
+      s = mapS (\t -> 1.0) theTimes :: Signal Time Double
       nb = 1000 
       s1 = frameWithWinAndOverlap 100 hann 50 $ s
       s2 = flattenWithOverlapS 50 s1
@@ -154,24 +154,24 @@ fftStyle =
         	                          ]
         	         }
 
-pict = discreteSignalsWithStyle (floor $ getT duration * getF samplingFrequency) 
+pict = discreteSignalsWithStyle (floor $ getT dr * getF samplingFrequency) 
                                                                       plotStyle theTimes [ AS mySignalA
                                                                                          , AS mySignalC
                                                                                          , AS mySignalD
                                                                                          , AS mySignalE] 
 
-pictwin = display $ discreteSignalsWithStyle 100 plotStyle (fromListS ([0..99] :: [Double])) [AS winv] 
+pictwin = display $ discreteSignalsWithStyle 100 plotStyle (fromListS 1 ([0..99] :: [Int])) [AS winv] 
 
-linearSignal :: forall a. Sample a => Signal a 
+linearSignal :: forall a. Sample a => Signal Time a 
 linearSignal = mapS (\t -> let x = (fromDouble $ getT t) in x*x) theTimes
 
-linearS :: Signal Double
+linearS :: Signal Time Double
 linearS = linearSignal
 
-la :: Signal (Fixed Int16 4 Sat NR)
+la :: Signal Time (Fixed Int16 4 Sat NR)
 la = linearSignal
 
-pictramp = display $ discreteSignalsWithStyle (floor $ getT duration * getF samplingFrequency)
+pictramp = display $ discreteSignalsWithStyle (floor $ getT dr * getF samplingFrequency)
                                                                       plotStyle theTimes [ AS linearS
                                                                                          , AS la
                                                                                          ]
@@ -179,7 +179,7 @@ randomSig :: (Show a, NFData a, Random a,Sample a, Resolution a) => a -> a -> IO
 randomSig a b = do 
     clearTrace
     let sig = do 
-        s <- randomSamples a b 
+        s <- randomSamples sp a b 
         let g = mapS (\t -> fromDouble (sin (2*pi*getT t))) theTimes
             r = zipWithS (+) s g 
         return $ trace "test" r
@@ -187,30 +187,30 @@ randomSig a b = do
     --s <- sig
     --display $ discreteSignalsWithStyle (floor $ getT duration * getF samplingFrequency) plotStyle theTimes [AS $ trace "test" s]
 
-spectruma :: Signal Double
-(freqR,spectruma) = spectrum samplingFrequency duration (noWindow) mySignalA
+spectruma :: Signal Frequency Double
+spectruma = spectrum dr (noWindow) mySignalA
 
-spectrumConst :: Signal Double
-(_,spectrumConst) = spectrum samplingFrequency duration (noWindow) (mapS toDouble constSignal)  
-
--- To debug : fixed point typing problem
-spectrumc :: Signal Double
-(_,spectrumc) = spectrum samplingFrequency duration noWindow (mapS toDouble mySignalC)  
+spectrumConst :: Signal Frequency Double
+spectrumConst = spectrum dr (noWindow) (mapS toDouble constSignal)  
 
 -- To debug : fixed point typing problem
-spectrumd :: Signal Double
-(_,spectrumd) = spectrum samplingFrequency duration noWindow mySignalD  
+spectrumc :: Signal Frequency Double
+spectrumc = spectrum dr noWindow (mapS toDouble mySignalC)  
 
-spectrumb :: Signal Double
-(_,spectrumb) = spectrum samplingFrequency duration noWindow mySignalB
+-- To debug : fixed point typing problem
+spectrumd :: Signal Frequency Double
+spectrumd = spectrum dr noWindow mySignalD  
 
-spectrume:: Signal Double
-(_,spectrume) = spectrum samplingFrequency duration noWindow (mapS toDouble mySignalE)
+spectrumb :: Signal Frequency Double
+spectrumb = spectrum dr noWindow mySignalB
 
-frequencies :: Signal Frequency
-frequencies = uniformSamples freqR 0.0
+spectrume:: Signal Frequency Double
+spectrume = spectrum dr noWindow (mapS toDouble mySignalE)
 
-pictb = discreteSignalsWithStyle (floor $ 100.0 / getF freqR) fftStyle 
+frequencies :: Signal Frequency Frequency
+frequencies = uniformSamples (samplingPeriod spectruma) 0.0
+
+pictb = discreteSignalsWithStyle (floor $ 100.0 / getF (samplingPeriod spectruma)) fftStyle 
                                                                             frequencies [ AS spectruma 
                                                                                         , AS spectrumc 
                                                                                         , AS spectrumd

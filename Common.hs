@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Common(
 	  Time(..),
 	  Frequency(..),
@@ -6,9 +5,7 @@ module Common(
 	) where 
 
 
-newtype Time = Time {getT :: Double} deriving(Eq,Ord,Show,Floating,Fractional,Num,Real,RealFloat,RealFrac,Read)
-newtype Frequency = Frequency {getF :: Double} deriving(Eq,Ord,Show,Floating,Fractional,Num,Real,RealFloat,RealFrac,Read)
-
+import Internal(Time(..), Frequency(..), Dual(..))
 
 -- | Signals can use values which are not directly doubles (like voltage etc ...)
 -- Those values must be convertible into Double for display on a graphic

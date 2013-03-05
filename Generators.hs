@@ -13,18 +13,19 @@ import Data.List.Stream
 uniformSamples :: Num a 
                => a -- ^ Period
                -> a -- Start
-               -> Signal a
-uniformSamples sampling start = Signal $ unstream (uniformS sampling start)
+               -> Signal a a
+uniformSamples sampling start = Signal sampling $ unstream (uniformS sampling start)
  where 
  	uniformS sampling start = Stream (nextS sampling) (L start) 
  	nextS sampling (L !s) = Yield s (L (s + sampling))
 
 
 randomSamples :: (Random a) 
-              => a
+              => t 
+              -> a
               -> a 
-              -> IO (Signal a)
-randomSamples mi ma = do 
+              -> IO (Signal t a)
+randomSamples r mi ma = do 
 	g <- newStdGen 
 	let l = randomRs (mi,ma) g
-	return $ Signal $ l
+	return $ Signal r $ l

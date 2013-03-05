@@ -20,39 +20,59 @@ import Data.List.Stream
 import qualified Data.Vector.Unboxed as U
 import Data.Vector.Unboxed((!),Unbox(..))
 
+-- This version is not lazy enough and we get an infinite loop
+-- (I don't yet understand why)
+--frameWithWinAndOverlap :: (Unbox a) 
+--                       => Int
+--                       -> (Int -> Int -> a -> a) 
+--                       -> Int 
+--                       -> Signal t a 
+--                       -> Signal t (U.Vector a) 
+--frameWithWinAndOverlap winSize winF o s = 
+--    let frame z = 
+--          let (ws,r1) = splitAtS (winSize - o) z 
+--              (os,r2) = splitAtS o r1 
+--              h = toVectorBS $ imapBS (winF winSize) (appendBS ws os)
+--          in 
+--          consS h (frame r1)
+--    in 
+--    frame s
+
 frameWithWinAndOverlap :: (Unbox a) 
                        => Int
                        -> (Int -> Int -> a -> a) 
                        -> Int 
-                       -> Signal a 
-                       -> Signal (U.Vector a) 
-frameWithWinAndOverlap winSize winF o (Signal s) = 
+                       -> Signal t a 
+                       -> Signal t (U.Vector a) 
+frameWithWinAndOverlap winSize winF o si@(Signal r s) = 
     let frame z = 
-          let (ws,r1) = splitAt (winSize - o) z 
-              (os,r2) = splitAt o r1 
+          let (ws,r1) = splitAtS (winSize - o) z 
+              (os,r2) = splitAtS o r1 
+              h = toVectorBS . imapBS (winF winSize) $ (appendBS ws  os)
           in 
-          (U.imap (winF winSize) . U.fromList $ (ws ++ os)) : frame (os ++ r2)
+          h:(frame r1)
     in 
-    Signal (frame s)
+    Signal r (frame si)
+
 
 flattenWithOverlapS :: (Unbox a,Num a) 
                     => Int 
-                    -> Signal (U.Vector a)
-                    -> Signal a 
-flattenWithOverlapS o s@(Signal l) | null l = Signal []
-                                   | o == 0 = Signal (concatMap U.toList $ l)
-                                   | otherwise = 
-                                      let h = head l 
-                                          n = U.length h
-                                          index = U.fromList [0..o-1]
-                                          _flatten [] = []
-                                          _flatten (a:b:l) = U.toList (U.slice o (n-o) v) : _flatten (b:l)
-                                            where 
-                                              combine b i x | i >= o = x + (b!(i-o))
-                                                            | otherwise = x
-                                              v = U.imap (combine b) a
-                                      in 
-                                      Signal $ (take o . U.toList $ h) ++ (concat . _flatten $ l)
+                    -> Signal t (U.Vector a)
+                    -> Signal t a 
+flattenWithOverlapS o s@(Signal r l) | null l = error "A signal can't be empty : in flattenWithOverlapS"
+                                     | o == 0 = concatMapS U.toList s
+                                     | otherwise = 
+                                          let h = headS s 
+                                              n = U.length h
+                                              index = U.fromList [0..o-1]
+                                              _flatten [] = []
+                                              _flatten (a:b:l) = U.toList (U.slice o (n-o) v) : _flatten (b:l)
+                                                where 
+                                                  combine b i x | i >= o = x + (b!(i-o))
+                                                                | otherwise = x
+                                                  v = U.imap (combine b) a
+                                          in 
+                                          appendListS (take o . U.toList $ h) (concatS . onSamples _flatten $ s)
 
 
 cossq m i x = let sq z = z * z 
