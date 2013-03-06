@@ -246,7 +246,8 @@ instance Conversion Int16 Int64 where
 instance Conversion Int16 Int40 where
 instance Conversion Int32 Int64 where
 instance Conversion Int64 Int32 where
-
+instance Conversion Int32 Int40 where 
+instance Conversion Int40 Int32 where
 
 
 instance Conversion Word32 Word16 where 
