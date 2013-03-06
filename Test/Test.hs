@@ -104,18 +104,23 @@ playWav = do
   s <- readMono "Test.wav" :: IO (Signal Time Double)
   playS (Time 2.0) s
 
-
 -- PROBLEM
 wavSpect = do
-  s <- readMono "Test.wav" :: IO (Signal Time Double)
-  let tr = dual (samplingRate s)
+  s0 <- readMono "Test.wav" :: IO (Signal Time (Fixed Int16 10 Sat NR))
+  r <- randomSamples (samplingPeriod s0) (fromDouble $ -0.01) (fromDouble 0.01)
+  let tr = dual (samplingRate s0)
       theTimes = uniformSamples tr 0.0
-      spect = spectrogram s (Time 6.0) hann 20
+      ampl = mapS (\t -> (fromDouble $ 1+0.2*sin(2*pi*getT t))) theTimes
+      s = zipWithS (+) s0 (zipWithS (*) ampl r)
+      spect = spectrogram (mapS toDouble s) (Time 6.0) hann 20
       v = vad s
-      theFrames = uniformSamples (samplingPeriod v) 0
+      sv = samplingPeriod v
+      theFrames = uniformSamples sv 0
       pict = discreteSignalsWithStyle (floor $ 6.0 * getF (samplingRate s))  plotStyle (theTimes) [ AS s]
-      --pictv = discreteSignalsWithStyle (floor $ 4.0 * getF (samplingRate v))  (plotStyle {title = Just "VAD"}) (theFrames) [ AS v]
-  display $ Vertical 0 [pict,spect]
+      pictv = discreteSignalsWithStyle (floor $ 6.0 / getT sv)  ( plotStyle {title = Just "VAD"
+                                                                , interpolation = False})
+                                                                  (theFrames) [ AS v]
+  display $ Vertical 0 [pict,pictv,spect]
 
 debugFFT = do 
   s <- readMono "Test.wav" :: IO (Signal Time Double)

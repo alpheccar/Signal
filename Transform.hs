@@ -9,11 +9,10 @@
 {-# LANGUAGE ConstraintKinds #-}
 module Transform(
       --spectrum 
-      fft 
-    , ifft 
-    , spectrum
+      spectrum
     , testFFT
     , testFFT1
+    , FFT(..)
     --, testBitReverse
     -- , bitReverse
     ) where 

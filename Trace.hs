@@ -9,6 +9,7 @@ module Trace(
     , CanBeTraced
     , traceValues
     , trace
+    , traceSample
     , forceSignal
     ) where 
 

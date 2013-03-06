@@ -30,6 +30,11 @@ import Test.Framework.Providers.HUnit(testCase)
 import Test.HUnit.Base
 import Control.DeepSeq
 import System.Random
+import qualified Data.Vector.Unboxed as U
+import Data.Vector.Unboxed((!),Unbox(..))
+import qualified Data.Vector.Generic.Mutable as M
+import Control.Monad(liftM)
+import qualified Data.Vector.Generic as G
 
 type family SuperInt a
 type family BaseValue a
@@ -291,6 +296,8 @@ instance RawValue Word##NB where {\
     baseValue = id \
 ;   fromBaseValue = id }; \
 
+
+
 #define FAKE_INSTANCES(INT) \
 instance Floating INT where {\
     pi = error ("Floating instance for" ++ #INT ++ "declared only because of Complex of fixed point but has no meaning") \
@@ -385,6 +392,20 @@ instance Eq INT where {\
      ia == ib = (baseValue ia) .&. registerMask ia == (baseValue ib) .&. registerMask ia};\
 instance Show INT where {\
     show ia = show (signExtend ia)};\
+instance M.MVector U.MVector INT where {\
+    basicLength v = M.basicLength v \
+;   basicUnsafeSlice a b v = M.basicUnsafeSlice a b v \
+;   basicOverlaps a b = M.basicOverlaps a b \
+;   basicUnsafeNew n = M.basicUnsafeNew n \
+;   basicUnsafeRead v i = M.basicUnsafeRead v i \
+;   basicUnsafeWrite v i r = M.basicUnsafeWrite v i r}; \
+instance G.Vector U.Vector INT where {\
+   basicLength v = G.basicLength v\
+;   basicUnsafeFreeze v = G.basicUnsafeFreeze v\
+;   basicUnsafeThaw v =  G.basicUnsafeThaw v\
+;   basicUnsafeSlice a b v = G.basicUnsafeSlice a b v\
+;   basicUnsafeIndexM v i = G.basicUnsafeIndexM v i };\
+instance Unbox INT where {};\
 FAKE_INSTANCES(INT)
 
 

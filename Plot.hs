@@ -313,7 +313,8 @@ drawLine pb@(xb :+ yb) p  = do
                     | otherwise = he - 1
                 pts  = [start, start+1..end]
                 pos = wi*(he - 1 -start)+x 
-                allPos = [pos, pos - wi ..]
+                allPos | pos < maxLen = [pos, pos - wi .. 0]
+                       | otherwise = [maxLen-1,maxLen-1-wi .. 0]
                 addPoint (p,_) = do 
                   old <- M.read a p 
                   let new = combineColor old
@@ -322,7 +323,7 @@ drawLine pb@(xb :+ yb) p  = do
             mapM_ addPoint (zip allPos pts)   
 
         horizontalLine :: M.MVector s Word32 -> Int -> Int -> Int -> ST s () 
-        horizontalLine a y xi xj =
+        horizontalLine a y0 xi xj =
             let [x0,x1] = sort [xi,xj]
                 start | x0 >= 0 = x0 
                       | otherwise = 0 
@@ -330,7 +331,10 @@ drawLine pb@(xb :+ yb) p  = do
                     | otherwise = wi - 1
                 pts  = [start, start+1..end]
                 pos = wi*(he - 1 - y)  +  start
-                allPos = [pos, pos + 1 ..]
+                y | y0 == he = he-1 
+                  | otherwise = y0
+                allPos | pos >=0 = [pos, pos + 1 .. maxLen - 1]
+                       | otherwise = [0,1 .. maxLen-1]
                 addPoint (p,_) = do
                   old <- M.read a p 
                   let new = combineColor old
