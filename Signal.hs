@@ -115,7 +115,7 @@ import Viewer(play)
 type Sample a = (RealFrac a, RealFloat a, HasDoubleRepresentation a, Unbox a)
 
 instance Sample a => Playable (Time,Frequency, Signal Time a) where 
-    sound (d,f,s) = (getF f, toListBS . takeS (P.floor (getT d * getF f) ). mapS toDouble $ s)
+    sound (d,f,s) = (getF f, take (P.floor (getT d * getF f) ) . getSamples . mapS toDouble $ s)
 
 playS :: Sample a 
       => Time 
@@ -296,8 +296,8 @@ fromVectorBS :: Unbox a => t -> U.Vector a -> BSignal t a
 fromVectorBS r v = BSignal r v
 {-# INLINE [0] fromVectorBS #-}
 
-fromListS :: t -> [a] -> Signal t a 
-fromListS r = Signal r . cycle
+fromListS :: t -> a -> [a] -> Signal t a 
+fromListS r d l = Signal r ((l ++) . (repeat d ++) $ [])
 {-# INLINE [0] fromListS #-}
 
 fromListBS :: Unbox a => t -> [a] -> BSignal t a 
@@ -308,8 +308,8 @@ toListBS :: Unbox a => BSignal t a -> [a]
 toListBS (BSignal _ l) = U.toList l
 {-# INLINE [0] toListBS #-}
 
-fromBS :: Unbox a => BSignal t a -> Signal t a 
-fromBS s = bs (cycle . U.toList) s
+fromBS :: Unbox a => a -> BSignal t a -> Signal t a 
+fromBS a s = bs ((\t -> ((U.toList t) ++) . (repeat a ++) $ []) )s
 {-# INLINE [0] fromBS #-}
 
 appendBSToS :: Unbox a => BSignal t a -> Signal t a -> Signal t a 

@@ -3,6 +3,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE BangPatterns #-}
 {- | Example implementation for displaying signals
 
 -}
@@ -48,6 +49,7 @@ import Data.Word
 import Data.Bits
 import Data.List(sortBy,unfoldr,sort)
 import Data.Function(on)
+import Data.STRef
 
 import Debug.Trace
 debug a = trace (show a) a
@@ -56,17 +58,17 @@ maximumPoints = 800
 
 -- | A list fo signals wth style information for the plot and the signals
 -- The signals are using the same units
-data StyledSignal a b = StyledSignal Bool [[(a,b)]] (PlotStyle a b)
+data StyledSignal a b = StyledSignal Bool [a] [[b]] (PlotStyle a b)
 
 -- | Style for a signal (only color used in this version)
 data SignalStyle = SignalStyle {
-                  signalColor :: Color 
-                , signalWidth :: Double
-                , signalOpacity :: Double
+                  signalColor :: !Color 
+                , signalWidth :: !Double
+                , signalOpacity :: !Double
 }
 
 -- | Style for a label
-data LabelStyle = LabelStyle Int Justification PDF.Orientation 
+data LabelStyle = LabelStyle !Int !Justification !(PDF.Orientation) 
 
 
 {-
@@ -108,10 +110,10 @@ type CoordinateMapping a b = (PictureCoordinates a b, PlotCoordinates a b)
 -- | Style for a plot
 data PlotStyle a b = PlotStyle {
                        title :: Maybe String 
-                     , leftMargin :: Double 
-                     , rightMargin :: Double 
-                     , topMargin :: Double 
-                     , bottomMargin :: Double 
+                     , leftMargin :: !Double 
+                     , rightMargin :: !Double 
+                     , topMargin :: !Double 
+                     , bottomMargin :: !Double 
                      , horizontalTickValues :: Double -> Double -> [Double]
                      , verticalTickValues :: Double -> Double -> [Double] 
                      , horizontalTickRepresentation :: Double -> String
@@ -122,8 +124,8 @@ data PlotStyle a b = PlotStyle {
                      , prolog :: Maybe (PDFReference RawImage) -> CoordinateMapping a b -> Draw ()
                      , epilog :: CoordinateMapping a b -> Draw () 
                      , signalStyles :: [SignalStyle]
-                     , axis :: Bool
-                     , interpolation :: Bool
+                     , axis :: !Bool
+                     , interpolation :: !Bool
                      , horizontalBounds :: Maybe (Double,Double)
                      , verticalBounds :: Maybe (Double,Double)
 }
@@ -165,8 +167,8 @@ defaultPlotStyle =
               }
 
 -- | Create a plot description with signals and a plot style
-signalsWithStyle :: Bool -> [[(a,b)]] -> PlotStyle a b -> StyledSignal a b 
-signalsWithStyle c signals style = StyledSignal c signals style
+signalsWithStyle :: Bool -> [a] -> [[b]] -> PlotStyle a b -> StyledSignal a b 
+signalsWithStyle c times signals style = StyledSignal c times signals style
 
 data AnySignal t = forall b. HasDoubleRepresentation b => AS (Signal t b) 
 
@@ -178,19 +180,18 @@ discreteSignalsWithStyle :: HasDoubleRepresentation t
                          -> [AnySignal t] 
                          -> StyledSignal Double Double
 discreteSignalsWithStyle nbPoints style timeSignal signals1  = 
-    let theTimes2 = mapS toDouble timeSignal
+    let theTimes = {-# SCC "InternalTimes" #-} take nbPointsToDraw . map toDouble . getSamples $ timeSignal
         reduce = (nbPoints `quot` maximumPoints) - 1 
         nbPointsToDraw = nbPoints 
-        theTimes = theTimes2 
         convertSignal :: AnySignal t -> Signal t Double
         convertSignal (AS s) = mapS toDouble s        
-        timedSignal s = toListBS . takeS nbPointsToDraw . zipS theTimes $ (convertSignal s)
-        theCurves :: [[(Double,Double)]]
-        theCurves = map timedSignal signals1
+        timedSignal s = take nbPointsToDraw . getSamples . convertSignal $ s
+        theCurves :: [[Double]]
+        theCurves = {-# SCC theCurves #-} map timedSignal signals1
         --complex = True
         complex = reduce >= 0
     in 
-    signalsWithStyle complex theCurves style
+    signalsWithStyle complex theTimes theCurves style
 
 type Drawing a = (Int -> Int -> PDF a, a -> Int -> Int -> Draw ())
 data Pair a = Pair (Drawing a) (Drawing a) (Draw () -> Draw () -> Draw ())
@@ -242,9 +243,9 @@ instance Canvas Draw where
 instance Functor Complex where 
     fmap f (a :+ b) = f a :+ f b
 
-ppixel :: Point -> PState -> ST s (M.MVector s Word32)
-ppixel pa@(xa :+ ya) p = do 
-  mv <- pixels p 
+ppixel :: Point -> PState -> STRef s (M.MVector s Word32) -> ST s (STRef s (M.MVector s Word32))
+ppixel pa@(xa :+ ya) p mvref = do 
+  mv <- readSTRef mvref
   let maxLen = w p * h p - 1
       Rgb r g b = currentColor p
       alpha = currentAlpha p
@@ -257,17 +258,17 @@ ppixel pa@(xa :+ ya) p = do
       wi = w p 
       he = h p
       plotPoint :: M.MVector s Word32 -> (Complex Int) -> ST s ()
-      plotPoint a (x :+ y) | pos >= 0 && pos < maxLen = M.write a pos c
-                           | otherwise = return ()
+      plotPoint !a (x :+ y) | pos >= 0 && pos < maxLen = M.write a pos c
+                            | otherwise = return ()
          where 
              pos = wi * (he - 1 - y) + x
   plotPoint mv (floor xa :+ floor ya)
-  return mv
+  return mvref
 
 
-drawLine ::  Point -> PState -> ST s (M.MVector s Word32) 
-drawLine pb@(xb :+ yb) p  = do 
-    mv <- pixels p
+drawLine ::  Point -> PState -> STRef s (M.MVector s Word32) -> ST s (STRef s (M.MVector s Word32))
+drawLine pb@(xb :+ yb) p  mvref = do 
+    mv <- readSTRef mvref
     let maxLen = w p * h p - 1
         pa@(xa :+ ya) = currentPos p
         Rgb r g b = currentColor p
@@ -284,11 +285,11 @@ drawLine pb@(xb :+ yb) p  = do
         horizontal = floor yb == floor ya
         {-# INLINE plotPoint #-}
         plotPoint :: M.MVector s Word32 -> (Complex Int) -> ST s ()
-        plotPoint a (x :+ y) | pos >= 0 && pos < maxLen = do 
+        plotPoint !a (x :+ y) | pos >= 0 && pos < maxLen = do 
                                   old <- M.read a pos
                                   let new = combineColor old
                                   M.write a pos new
-                             | otherwise = return ()
+                              | otherwise = return ()
            where 
                pos = wi * (he - 1 - y) + x
 
@@ -305,7 +306,7 @@ drawLine pb@(xb :+ yb) p  = do
             --in 
             --new
         verticalLine :: M.MVector s Word32 -> Int -> Int -> Int -> ST s () 
-        verticalLine a x yi yj =
+        verticalLine !a x yi yj =
             let [y0,y1] = sort [yi,yj]
                 start | y0 >= 0 = y0 
                       | otherwise = 0 
@@ -323,7 +324,7 @@ drawLine pb@(xb :+ yb) p  = do
             mapM_ addPoint (zip allPos pts)   
 
         horizontalLine :: M.MVector s Word32 -> Int -> Int -> Int -> ST s () 
-        horizontalLine a y0 xi xj =
+        horizontalLine !a y0 xi xj =
             let [x0,x1] = sort [xi,xj]
                 start | x0 >= 0 = x0 
                       | otherwise = 0 
@@ -349,8 +350,9 @@ drawLine pb@(xb :+ yb) p  = do
                                | otherwise = thep
                where 
                    steep = abs ((yb - ya) / (xb - xa))
+
         line s e = 
-            let f x = floor x
+            let f x = floor $! x
                 [s',e'] = sortBy (compare `on` realPart) [s,e]
                 x0 = f (realPart s')
                 y0 = f (imagPart s')
@@ -384,14 +386,14 @@ drawLine pb@(xb :+ yb) p  = do
                | horizontal =  horizontalLine mv (floor ya) (floor xa) (floor xb)
                | otherwise = mapM_ (plotPoint mv . reversal)  $ line (reversal pa) (reversal pb)
     action
-    return mv
+    return mvref
    
 data PState   =          PState {  currentColor :: !Color 
                                  , currentAlpha :: !Double 
                                  , currentPos :: !Point
-                                 , w :: Int 
-                                 , h :: Int
-                                 , pixels :: forall s.ST s (M.MVector s Word32)
+                                 , w :: !Int 
+                                 , h :: !Int
+                                 , pixels :: forall s. ST s (STRef s (M.MVector s Word32)) 
                                  } 
 
 data Pixmap  a = Pixmap {getPixmap :: State (PState ) a} 
@@ -408,11 +410,11 @@ instance Canvas (Pixmap ) where
     moveTo p = modify $! \s -> 
        s {currentPos = p}
     lineTo p = modify $! \s -> 
-       let newPixel = drawLine p s
+       let newPixel = pixels s >>= drawLine p s
        in
        s {currentPos = p, pixels = newPixel}
     pixel p = modify $! \s -> 
-       let newPixel = ppixel p s
+       let newPixel = pixels s >>= ppixel p s
        in
        s {currentPos = p, pixels = newPixel}
     setColor c a = modify $! \s -> 
@@ -423,10 +425,16 @@ instance Canvas (Pixmap ) where
 
 runPixmap :: Int -> Int -> Pixmap () -> PDF (PDFReference RawImage)  
 runPixmap width height p = 
-    let finalState = execState (getPixmap p) $ (PState (Rgb 0.0 0.0 0.0) 1.0 (0.0 :+ 0.0) width height  
-                                                     (M.replicate  (width*height) 0x00FFFFFF))  
+    let finalState = execState (getPixmap p) $ (PState (Rgb 0.0 0.0 0.0) 1.0 (0.0 :+ 0.0) width height startState)
+        
+        startState :: ST s (STRef s (M.MVector s Word32)) 
+        startState = do
+          v <- M.replicate  (width*height) 0x00FFFFFF 
+          newSTRef v
+          
         result p = runST $ do 
-           mv <- pixels p
+           refmv <- pixels p
+           mv <- readSTRef refmv
            U.freeze mv
     in 
     createPDFRawImage (fromIntegral width) (fromIntegral height) False $ (result finalState)
@@ -473,8 +481,8 @@ simplifySignal pt (l,sty) = (simpl s0 v0 v0 (tail l), sty)
              in 
              (s, v)
   (s0,v0) = getNew l
-  simpl c mi ma [] = (c,mi):(c,ma):[]
-  simpl c mi ma ((a,b):l) | test (c,mi) (a,b) = simpl c (min mi b) (max ma b) l 
+  simpl !c !mi !ma [] = (c,mi):(c,ma):[]
+  simpl !c !mi !ma ((a,b):l) | test (c,mi) (a,b) = simpl c (min mi b) (max ma b) l 
                           | otherwise = 
                             if null l 
                                then (c,mi):(c,ma):[] 
@@ -499,11 +507,12 @@ data Resource = R { plotPixmap :: Maybe  (PDFReference RawImage)
 
 -- | A plot description is Displayable
 instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>  Displayable (StyledSignal a b) Resource where 
-    drawing (StyledSignal complex signals s) = 
-        let (ta,tb) = maybe ( minimum . map (minimum . map (toDouble . fst)) $ signals 
-                            , maximum . map (maximum . map (toDouble . fst)) $ signals) id (horizontalBounds s)
-            (ya,yb) = maybe ( minimum . map (minimum . map (toDouble . snd)) $ signals 
-                            , maximum . map (maximum . map (toDouble . snd))$ signals) id (verticalBounds s) 
+    drawing (StyledSignal complex theTimes signals s) = 
+        let (ta,tb) = maybe ( minimum . map toDouble $ theTimes 
+                            , maximum . map toDouble $ theTimes) id (horizontalBounds s)
+            (ya,yb) = maybe ( minimum . map (minimum . map toDouble ) $ signals 
+                            , maximum . map (maximum . map toDouble ) $ signals) id (verticalBounds s) 
+            timed = map (zip theTimes)
             action myRsrc wi hi = do
               let width = fromIntegral wi 
                   height = fromIntegral hi
@@ -560,7 +569,7 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                   (prolog s) roR (pt,ippt)
   
                   case imgR of 
-                      Nothing  -> mapM_ (drawSignal s pt) (zip signals (cycle $ signalStyles s))
+                      Nothing  -> mapM_ (drawSignal s pt) (zip (timed signals) (cycle $ signalStyles s))
                       (Just imgref)  -> do
                           withNewContext $ do
                                   applyMatrix $ translate (leftMargin s :+ bottomMargin s)
@@ -600,7 +609,7 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                                  ippt (a :+ b) = (iw a,ih b)
                              pr <- (prologRsrc s) wi hi (ppt,ippt)
                              r <- runPixmap (floor rw) (floor rh) $ do
-                                       mapM_ (drawSignal s ppt . simplifySignal ppt) $ (zip signals (cycle $ signalStyles s))
+                                       mapM_ (drawSignal s ppt . simplifySignal ppt) $ (zip (timed signals) (cycle $ signalStyles s))
                                        --setColor (Rgb 1.0 0 0) 1.0 
                                        --moveTo (0 :+ 0)
                                        --lineTo (100 :+ 100)
@@ -610,7 +619,7 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                                        --moveTo (200 :+ 100)
                                        --lineTo (100 :+ 100)
                                        
-                             return $ R (Just r) pr
+                             return $! R (Just $! r) $! pr
                        | otherwise = do 
                            let rw = fromIntegral wi - leftMargin s - rightMargin s 
                                rh = fromIntegral hi - topMargin s - bottomMargin s 
@@ -621,7 +630,7 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                                ih a = fromDouble $ toDouble a /  rh * (yb - ya) + ya
                                ippt (a :+ b) = (iw a,ih b)
                            pr <- (prologRsrc s) wi hi (ppt,ippt)
-                           return (R Nothing pr)
+                           return (R Nothing $! pr)
         in
         (rsrc, action)
 

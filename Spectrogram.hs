@@ -105,6 +105,7 @@ spectrogram signal duration window overlap =
                                  , horizontalLabel = Just "frame"
                                  , verticalLabel = Just "Hz"
                                  }
-        l=[] :: [[(Double,Double)]]
+        l=[] :: [[Double]]
+        theFrames = [] :: [Double]
     in
-    signalsWithStyle False l style 
+    signalsWithStyle False theFrames l style 

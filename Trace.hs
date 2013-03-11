@@ -122,7 +122,7 @@ traceValues s = do
                                               map (/ s) templ
                                         (lt,lp) = removeZeroAndLog lt' lp'
                                     let r = (log bma - log bmi) / fromIntegral (length lp)
-                                    drawing $ discreteSignalsWithStyle (length lt) plotStyle (fromListS r lt)  [ AS (fromListS r lp)]
+                                    drawing $ discreteSignalsWithStyle (length lt) plotStyle (fromListS r 0 lt)  [ AS (fromListS r 0 lp)]
             let (wi,he) = (\(x,y) -> (fromIntegral x, fromIntegral y)) $ viewerSize 
             if (signedFormat h) 
                 then do

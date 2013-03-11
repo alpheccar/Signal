@@ -110,7 +110,7 @@ bandEnergyF :: (SingI n, SingI s, SingI r, SingI (n + n)) => Complex (Fixed Int1
 bandEnergyF (x :+ y) = amul x x + amul y y
 
 class VAD a where 
-    vad :: (Sample a, FFT a, Resolution a) 
+    vad :: (Sample a, FFT a) 
         => Signal Time a 
         -> Signal Time a
 

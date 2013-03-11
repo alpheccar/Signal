@@ -4,20 +4,19 @@ module Generators(
 	, randomSamples
 	) where 
 
+import Prelude hiding(unfoldr)
 import Common
 import Internal
-import Data.Stream(stream,unstream,Stream(..),Step(..),L(..))
 import System.Random 
 import Data.List.Stream
 
-uniformSamples :: Num a 
-               => a -- ^ Period
-               -> a -- Start
-               -> Signal a a
-uniformSamples sampling start = Signal sampling $ unstream (uniformS sampling start)
+uniformSamples :: Num a  
+               => a 
+               -> a
+               -> Signal a a 
+uniformSamples sampling start = Signal sampling (unif start)
  where 
- 	uniformS sampling start = Stream (nextS sampling) (L start) 
- 	nextS sampling (L !s) = Yield s (L (s + sampling))
+   unif !s = s : unif (s + sampling)
 
 
 randomSamples :: (Random a) 

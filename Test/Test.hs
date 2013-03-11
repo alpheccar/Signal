@@ -1,7 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
-module Test(
-	  testa
+{-# LANGUAGE BangPatterns #-}
+module Main(
+	  main
 	
 	) where 
 
@@ -71,7 +72,7 @@ mySignalB = mapS (\t -> 0.8*cos (2*pi*getT t*30)*(1.0 + 0.8*cos(2*pi*getT t*10))
 
 winv :: Signal Int Double
 winv = 
-  fromListS 1 $ map (\i -> cossq 100 i 1.0) [0..99]
+  fromListS 1 0 $ map (\i -> cossq 100 i 1.0) [0..99]
 
 soundTest = do
     let f = Frequency 16000 
@@ -98,7 +99,25 @@ wav = do
   s <- readMono "Test.wav" :: IO (Signal Time Double)
   let tr = dual (samplingRate s)
       theTimes = uniformSamples tr 0.0
-  display $ discreteSignalsWithStyle (floor $ 2.0 * getF (samplingRate s))  plotStyle (theTimes) [ AS s]
+  display $ discreteSignalsWithStyle (floor $ 2.0 * getF (samplingRate s))  plotStyle 
+                 (theTimes) 
+                 [ AS s]
+
+myTest = do
+  --s <- readMono "Test.wav" :: IO (Signal Time Double)
+  let tr = dual (Frequency 44100)
+      theTimes = {-# SCC "theTimes" #-} uniformSamples tr 0.0 :: Signal Time Time
+      --s = mapS (\t -> 0.01*sin (2*pi*4000*getT t)) theTimes
+      --si = vad s
+      sv = samplingPeriod theTimes
+      ----theFrames = uniformSamples sv 0
+      --myLen !s (!a:l) = myLen (s+1) l
+      --myLen !s [] = s
+  display $ discreteSignalsWithStyle (floor $ 6.0 / getT sv)  plotStyle { horizontalBounds = Just (0,6.0)
+                                                                        , verticalBounds = Just (0,6.0)
+                                                                        }
+                (theTimes) [ AS theTimes]
+
 
 playWav = do 
   s <- readMono "Test.wav" :: IO (Signal Time Double)
@@ -109,18 +128,19 @@ wavSpect = do
   s0 <- readMono "Test.wav" :: IO (Signal Time (Fixed Int16 10 Sat NR))
   r <- randomSamples (samplingPeriod s0) (fromDouble $ -0.01) (fromDouble 0.01)
   let tr = dual (samplingRate s0)
-      theTimes = uniformSamples tr 0.0
+      theTimes = {-# SCC "theTimes" #-} uniformSamples tr 0.0
       ampl = mapS (\t -> (fromDouble $ 1+0.2*sin(2*pi*getT t))) theTimes
-      s = zipWithS (+) s0 (zipWithS (*) ampl r)
-      spect = spectrogram (mapS toDouble s) (Time 6.0) hann 20
-      v = vad s
+      s = {-# SCC "theSignal" #-} zipWithS (+) s0 (zipWithS (*) ampl r)
+      spect = {-# SCC "theSpectrogram" #-} spectrogram (mapS toDouble s) (Time 6.0) hann 20
+      v = {-# SCC "theVad" #-} vad s
       sv = samplingPeriod v
-      theFrames = uniformSamples sv 0
-      pict = discreteSignalsWithStyle (floor $ 6.0 * getF (samplingRate s))  plotStyle (theTimes) [ AS s]
-      pictv = discreteSignalsWithStyle (floor $ 6.0 / getT sv)  ( plotStyle {title = Just "VAD"
+      theFrames = {-# SCC "theFrames" #-} uniformSamples sv 0
+      pict = {-# SCC "pict" #-} discreteSignalsWithStyle (floor $ 6.0 * getF (samplingRate s))  plotStyle 
+                                (theTimes) [ AS s]
+      pictv = {-# SCC "pictv" #-} discreteSignalsWithStyle (floor $ 6.0 / getT sv)  ( plotStyle {title = Just "VAD"
                                                                 , interpolation = False})
                                                                   (theFrames) [ AS v]
-  display $ Vertical 0 [pict,pictv,spect]
+  display $ {-# SCC "Vertical" #-} Vertical 0 [pict,pictv,spect]
 
 debugFFT = do 
   s <- readMono "Test.wav" :: IO (Signal Time Double)
@@ -170,7 +190,7 @@ pict = discreteSignalsWithStyle (floor $ getT dr * getF samplingFrequency)
                                                                                          , AS mySignalD
                                                                                          , AS mySignalE] 
 
-pictwin = display $ discreteSignalsWithStyle 100 plotStyle (fromListS 1 ([0..99] :: [Int])) [AS winv] 
+pictwin = display $ discreteSignalsWithStyle 100 plotStyle (fromListS 1 0 ([0..99] :: [Int])) [AS winv] 
 
 linearSignal :: forall a. Sample a => Signal Time a 
 linearSignal = mapS (\t -> let x = (fromDouble $ getT t) in x*x) theTimes
@@ -225,3 +245,5 @@ pictb = discreteSignalsWithStyle (floor $ 100.0 / getF (samplingPeriod spectruma
                                                                                         , AS spectrumc 
                                                                                         , AS spectrumd
                                                                                         , AS spectrume]  
+
+main = myTest

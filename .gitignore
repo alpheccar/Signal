@@ -5,3 +5,8 @@ Test/*.wav
 misc.c
 misc.h
 gnucpp
+Test/thetest
+*.ps
+*.aux
+*.hp
+*.prof

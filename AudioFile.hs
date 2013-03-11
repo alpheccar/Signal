@@ -5,7 +5,7 @@ module AudioFile(
 	, readMono
 	) where 
 
-import Prelude hiding(length,map,zip,head)
+import Prelude hiding(length,map,zip,head,take)
 import Data.WAVE 
 import Signal
 import Common
@@ -27,7 +27,7 @@ writeMono :: Sample a
           -> IO () 
 writeMono name duration signal = 
 	let d = floor (getT duration * getF (samplingRate signal))
-	    boundedSignal = toListBS $ takeS d signal
+	    boundedSignal = take d . getSamples $ signal
 	    samples = map (\x -> [doubleToSample . toDouble $ x]) boundedSignal 
 	    w = wave (samplingRate signal) 1 d samples 
 	in 
@@ -41,7 +41,7 @@ writeStereo :: (Sample a, Sample b)
             -> IO () 
 writeStereo name duration signall signalr = 
 	let d = floor (getT duration * getF (samplingRate signall))
-	    boundedSignal = toListBS $ takeS d . zipS signall $ signalr
+	    boundedSignal = take d . getSamples . zipS signall $ signalr
 	    samples = map (\(x,y) -> [doubleToSample . toDouble $ x, doubleToSample . toDouble $ y]) boundedSignal 
 	    w = wave (samplingRate signall) 2 d samples 
 	in 
@@ -54,5 +54,4 @@ readMono name = do
 	w <- getWAVEFile name
 	let f = Frequency (fromIntegral $ waveFrameRate (waveHeader w)) 
 	    t = dual f
-	    s = fromListS t . map (fromDouble . sampleToDouble . head)  . waveSamples $ w
-	return s
+	return . fromListS t 0 . map (fromDouble . sampleToDouble . head)  . waveSamples $ w
