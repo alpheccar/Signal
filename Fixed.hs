@@ -298,8 +298,8 @@ genericFromInteger a = r
         b = a `shiftL` (nbFractionalBits r) 
         theMax = maxBound 
         theMin = minBound
-        r | b > fromIntegral theMax = Fixed theMax 
-          | b < fromIntegral theMin = Fixed theMin 
+        r | b > (fromIntegral theMax) = Fixed theMax 
+          | b < (fromIntegral theMin) = Fixed theMin
           | otherwise = Fixed (fromIntegral b)
 
 {-# INLINE genericProperFraction #-}
@@ -449,7 +449,7 @@ genericDiv :: (SingI n, SingI s, Bits a, NumberInfo (SuperInt a), NumberInfo a, 
            -> Fixed a n s r 
            -> Fixed a n s r 
 genericDiv f@(Fixed a) (Fixed b) =         
-        let la = (fromIntegral a)
+        let la = (fromIntegral a)   
             lb = (fromIntegral b)
             (q,_) = (la `shiftL` (nbFractionalBits f)) `quotRem` lb
             result = q
@@ -457,11 +457,7 @@ genericDiv f@(Fixed a) (Fixed b) =
         Fixed (saturateWithMode f $ result)
 
 {-# INLINE genericFromRational #-}
-genericFromRational r = 
-        let n = numerator r 
-            d = denominator r 
-        in 
-        fromIntegral n / fromIntegral d
+genericFromRational r = fromDouble (fromRational r)
 
 class FixedPoint a where
     fromRawValue :: a -> Fixed a n s r 

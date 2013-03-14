@@ -2,10 +2,10 @@ debug:
 	ghc -o thetest -prof -fprof-auto -rtsopts -O -XDataKinds -XTypeOperators -XConstraintKinds -package-db ../dist/package.conf.inplace Test.hs
 
 all:
-	ghc -o thetest -O -XDataKinds -XTypeOperators -XConstraintKinds -package-db ../dist/package.conf.inplace Test.hs
+	ghc -o thetest -O -rtsopts -XDataKinds -XTypeOperators -XConstraintKinds -package-db ../dist/package.conf.inplace Test.hs
 
 run:
-	./thetest +RTS -hc -p  -RTS
+	./thetest +RTS -K120M -hc -p  -RTS
 	hp2ps -c thetest.hp
 
 clean: 

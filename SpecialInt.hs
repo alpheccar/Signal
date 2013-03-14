@@ -173,11 +173,11 @@ Functions for Enum
 
 {-# INLINE genericSucc #-}
 genericSucc  i | i == maxBound = error "Can't increase the max bound" 
-               | otherwise = fromBaseValue (succ (baseValue i)) 
+               | otherwise = fromBaseValue (succ (signExtend i)) 
 
 {-# INLINE genericPred #-}           
 genericPred i  | i == minBound = error "Can't decrease the min bound" 
-               | otherwise = fromBaseValue (pred (baseValue i)) 
+               | otherwise = fromBaseValue (pred (signExtend i)) 
 
 {-# INLINE genericToEnum #-}
 genericToEnum a = r 
@@ -203,15 +203,17 @@ Integral instance
 -}
 
 {-# INLINE genericQuotRem #-}
-genericQuotRem :: (RawValue a, Integral (BaseValue a)) => a -> a -> (a,a)
+genericQuotRem :: (Bits (BaseValue a), NumberInfo a, RawValue a, Integral (BaseValue a)) 
+               => a -> a -> (a,a)
 genericQuotRem ia ib = 
-    let (q,r) = quotRem (baseValue ia) (baseValue ib) 
+    let (q,r) = quotRem (signExtend ia) (signExtend ib) 
     in 
     (fromBaseValue q, fromBaseValue r)
 
 {-# INLINE genericToInteger #-}
-genericToInteger :: (RawValue a, Integral (BaseValue a)) => a -> Integer 
-genericToInteger a = toInteger (baseValue a)
+genericToInteger :: (Bits (BaseValue a),NumberInfo a, RawValue a, Integral (BaseValue a)) 
+                 => a -> Integer 
+genericToInteger a = toInteger (signExtend a)
 
 {-
     
@@ -247,12 +249,12 @@ For Random instance
 -}       
 
 {-# INLINE genericRandomR #-}
-genericRandomR :: (Random (BaseValue a),RawValue a, RandomGen g)
+genericRandomR :: (NumberInfo a, Bits (BaseValue a), Num (BaseValue a), Integral (BaseValue a), Random (BaseValue a),RawValue a, RandomGen g)
                => (a, a) 
                -> g 
                -> (a, g) 
 genericRandomR (mi,ma) g = 
-  let (na,ng) = randomR ((baseValue mi),(baseValue ma)) g 
+  let (na,ng) = randomR ((signExtend mi),(signExtend ma)) g 
   in 
   (fromBaseValue na,ng)
 
@@ -335,7 +337,7 @@ instance RealFloat INT where { \
 ;  atan2 = error ("RealFloat instance for" ++ #INT ++ "declared only because of Complex of fixed point but has no meaning") };
 
 
-#define INT_INSTANCES(NB,SIGNED, INT,BASEVALUE,SUPERVALUE) \
+#define INT_INSTANCES(HASH,NB,SIGNED, INT,BASEVALUE,SUPERVALUE) \
 newtype INT = INT {from##INT :: BASEVALUE}; \
 type instance SuperInt INT = SUPERVALUE; \
 type instance BaseValue INT = BASEVALUE; \
@@ -382,7 +384,7 @@ instance Enum INT where { \
 ;    signum ia = fromBaseValue (signum (baseValue ia) .&. registerMask ia) \
 ;    fromInteger = genericFromInteger }; \
 instance Real INT where {\
-     toRational a = toRational (baseValue a)};\
+     toRational a = toRational (signExtend a)};\
 instance Integral INT where {\
      quotRem = genericQuotRem \
 ;    toInteger = genericToInteger };\
@@ -392,22 +394,36 @@ instance Eq INT where {\
      ia == ib = (baseValue ia) .&. registerMask ia == (baseValue ib) .&. registerMask ia};\
 instance Show INT where {\
     show ia = show (signExtend ia)};\
-instance M.MVector U.MVector INT where {\
-    basicLength v = M.basicLength v \
-;   basicUnsafeSlice a b v = M.basicUnsafeSlice a b v \
-;   basicOverlaps a b = M.basicOverlaps a b \
-;   basicUnsafeNew n = M.basicUnsafeNew n \
-;   basicUnsafeRead v i = M.basicUnsafeRead v i \
-;   basicUnsafeWrite v i r = M.basicUnsafeWrite v i r}; \
-instance G.Vector U.Vector INT where {\
-   basicLength v = G.basicLength v\
-;   basicUnsafeFreeze v = G.basicUnsafeFreeze v\
-;   basicUnsafeThaw v =  G.basicUnsafeThaw v\
-;   basicUnsafeSlice a b v = G.basicUnsafeSlice a b v\
-;   basicUnsafeIndexM v i = G.basicUnsafeIndexM v i };\
-instance Unbox INT where {};\
 FAKE_INSTANCES(INT)
 
+#define INT_ARRAY_INSTANCES(HASH,INT,BASEVALUE) \
+newtype instance U.MVector s INT = MV_##INT (U.MVector s BASEVALUE); \
+newtype instance U.Vector    INT = V_##INT (U.Vector BASEVALUE); \
+instance M.MVector U.MVector INT where {\
+  {-HASH INLINE basicLength HASH-}                                            \
+; {-HASH INLINE basicUnsafeSlice HASH-}                                       \
+; {-HASH INLINE basicOverlaps HASH-}                                          \
+; {-HASH INLINE basicUnsafeNew HASH-}                                         \
+; {-HASH INLINE basicUnsafeRead HASH-}                                        \
+; {-HASH INLINE basicUnsafeWrite HASH-}                                       \
+;   basicLength (MV_##INT v) = M.basicLength v \
+;   basicUnsafeSlice a b (MV_##INT v) = MV_##INT (M.basicUnsafeSlice a b v) \
+;   basicOverlaps (MV_##INT a) (MV_##INT b) = M.basicOverlaps a b \
+;   basicUnsafeNew n = MV_##INT `liftM` M.basicUnsafeNew n \
+;   basicUnsafeRead (MV_##INT v) i = fromBaseValue `liftM` M.basicUnsafeRead v i \
+;   basicUnsafeWrite (MV_##INT v) i r = M.basicUnsafeWrite v i (signExtend r)}; \
+instance G.Vector U.Vector INT where {\
+  {-HASH INLINE basicUnsafeFreeze HASH-}                                      \
+; {-HASH INLINE basicUnsafeThaw HASH-}                                        \
+; {-HASH INLINE basicLength HASH-}                                            \
+; {-HASH INLINE basicUnsafeSlice HASH-}                                       \
+; {-HASH INLINE basicUnsafeIndexM HASH-}                                      \
+;   basicLength (V_##INT v) = G.basicLength v\
+;   basicUnsafeFreeze (MV_##INT v) = V_##INT `liftM` G.basicUnsafeFreeze v\
+;   basicUnsafeThaw (V_##INT v) =  MV_##INT `liftM` G.basicUnsafeThaw v\
+;   basicUnsafeSlice a b (V_##INT v) = V_##INT (G.basicUnsafeSlice a b v)\
+;   basicUnsafeIndexM (V_##INT v) i = fromBaseValue `liftM` G.basicUnsafeIndexM v i };\
+instance Unbox INT where {};
 
 {-
 
@@ -418,8 +434,8 @@ List of instances
 -- | Missing big instances required as SuperInt of standard or special format
 -- Those instances cannot be used in fixed point because their super type (Integer)
 -- has no bitwidth
-INT_INSTANCES(256,True, Int256,Integer,Integer)
-INT_INSTANCES(256,False, Word256,Integer,Integer)
+INT_INSTANCES(#,256,True, Int256,Integer,Integer)
+INT_INSTANCES(#,256,False, Word256,Integer,Integer)
 
 STANDARD_INT(16,Int32)
 STANDARD_INT(32,Int64)
@@ -429,10 +445,16 @@ STANDARD_WORD(16,Word32)
 STANDARD_WORD(32,Word64)
 STANDARD_WORD(64,Word128)
 
-INT_INSTANCES(40,True,Int40,Int64,Int128)
-INT_INSTANCES(40,False, Word40,Word64,Word128)
-INT_INSTANCES(128,True,Int128,Integer,Int256)
-INT_INSTANCES(128,False, Word128,Integer,Word256)
+INT_INSTANCES(#,40,True,Int40,Int64,Int128)
+INT_ARRAY_INSTANCES(#,Int40,Int64)
+
+INT_INSTANCES(#,40,False, Word40,Word64,Word128)
+INT_ARRAY_INSTANCES(#,Word40,Word64)
+
+-- Integer is not supported in an unboxed vector so we can not
+-- define vectors for Int128 and Word128
+INT_INSTANCES(#,128,True,Int128,Integer,Int256)
+INT_INSTANCES(#,128,False, Word128,Integer,Word256)
 
 type instance Signed Word16 = Int16
 type instance Signed Word32 = Int32

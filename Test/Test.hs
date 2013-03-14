@@ -29,6 +29,7 @@ import Viewer(play)
 import Spectrogram 
 import VAD
 import Data.List.Stream((++))
+import System.Timeout
 
 import qualified Debug.Trace as T
 
@@ -128,15 +129,16 @@ playWav = do
 wavSpect = do
   s0 <- readMono "Test.wav" :: IO (Sampled Time (Fixed Int16 10 Sat NR))
   r <- randomSamples (fromDouble $ -0.01) (fromDouble 0.01)
-  let theTimes = {-# SCC "theTimes" #-} uniformSamples (period s0) 0.0
+  let duration = 6.0
+      theTimes = {-# SCC "theTimes" #-} uniformSamples (period s0) 0.0
       ampl = mapS (\t -> (fromDouble $ 1+0.2*sin(2*pi*getT t))) theTimes
       s = {-# SCC "theSignal" #-} zipWithS (+) (getSignal s0) (zipWithS (*) ampl r)
-      spect = {-# SCC "theSpectrogram" #-} spectrogram (Sampled (period s0) (mapS toDouble s)) (Time 6.0) hann 20
+      spect = {-# SCC "theSpectrogram" #-} spectrogram (Sampled (period s0) (mapS toDouble s)) (Time duration) hann 20
       v = {-# SCC "theVad" #-} vad $ Sampled (period s0) s
       theFrames = {-# SCC "theFrames" #-} uniformSamples (period v) 0
-      pict = {-# SCC "pict" #-} discreteSignalsWithStyle (floor $ 6.0 * getF (rate s0))  plotStyle 
+      pict = {-# SCC "pict" #-} discreteSignalsWithStyle (floor $ duration * getF (rate s0))  plotStyle 
                                 (AS theTimes) [ AS s]
-      pictv = {-# SCC "pictv" #-} discreteSignalsWithStyle (floor $ 6.0 / getT (period v))  
+      pictv = {-# SCC "pictv" #-} discreteSignalsWithStyle (floor $ duration / getT (period v))  
                                     ( plotStyle {title = Just "VAD" , interpolation = False})
                                       (AS theFrames) [ AS v]
   display $ {-# SCC "Vertical" #-} Vertical 0 [pict,pictv,spect]
@@ -244,15 +246,14 @@ pictb = discreteSignalsWithStyle (nbSamples spectruma (Frequency 100.0))  fftSty
                                                                                              , AS spectrumd
                                                                                              , AS spectrume]  
 
-main = myTest
+main = do 
+  wavSpect
+  return ()
 
-testLoop = print . takeS 10 . loop $ (cs 1)
- where 
-  loop s = 
-    let n = 2
-        (h,t) = splitAtS n s
-        r = map (*2) h 
-        d =  r ++ h 
-    in 
-    appendListS d (loop t) 
+testInt40 = 
+  let a = 3 :: Fixed Int40 8 Sat NR 
+      v = U.generate 4 (\i -> (fromIntegral i) :: Fixed Int40 8 Sat NR) 
+      z = U.map (/ a) v 
+  in 
+  print . U.toList $ z
 
