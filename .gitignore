@@ -10,3 +10,6 @@ Test/thetest
 *.aux
 *.hp
 *.prof
+Test/MiniTest.hs
+Test/buganalysis.hs
+Test/log.txt

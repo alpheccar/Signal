@@ -20,52 +20,35 @@ import Data.List.Stream
 import qualified Data.Vector.Unboxed as U
 import Data.Vector.Unboxed((!),Unbox(..))
 
--- This version is not lazy enough and we get an infinite loop
--- (I don't yet understand why)
---frameWithWinAndOverlap :: (Unbox a) 
---                       => Int
---                       -> (Int -> Int -> a -> a) 
---                       -> Int 
---                       -> Signal t a 
---                       -> Signal t (U.Vector a) 
---frameWithWinAndOverlap winSize winF o s = 
---    let frame z = 
---          let (ws,r1) = splitAtS (winSize - o) z 
---              (os,r2) = splitAtS o r1 
---              h = toVectorBS $ imapBS (winF winSize) (appendBS ws os)
---          in 
---          consS h (frame r1)
---    in 
---    frame s
 
-frameWithWinAndOverlap :: (Unbox a, Fractional t) 
-                       => Int
-                       -> Int 
-                       -> (Int -> Int -> a -> a) 
-                       -> Signal t a 
-                       -> Signal t (U.Vector a) 
-frameWithWinAndOverlap winSize o winF si@(Signal r s) = 
-    let r' = r * fromIntegral (winSize - o)
+frameWithWinAndOverlap :: (Unbox a, Num t) 
+                       => Int -- ^ Window size
+                       -> Int -- ^ Overlap in samples
+                       -> (Int -> Int -> a -> a)  -- ^ Window function
+                       -> Sampled t a -- ^ Input signal
+                       -> Sampled t (U.Vector a) -- Result and new sampling period
+frameWithWinAndOverlap winSize o winF signal = 
+    let r' = (period signal) * fromIntegral (winSize - o)
         frame z = 
-          let (ws,r1) = splitAtS (winSize - o) z 
-              (os,r2) = splitAtS o r1 
-              h = U.imap (winF winSize) . U.fromList . (ws ++) .  (os ++) $ []
+          let (ws,r1) = splitAtVectorS (winSize - o) z 
+              (os,r2) = splitAtVectorS o r1 
+              h = toVectorBS $ imapBS (winF winSize) (appendBS ws os)
           in 
-          h:(frame r1)
+          consS h (frame r1)
     in 
-    Signal r' (frame si)
+    Sampled r' (frame (getSignal signal))
+
 
 
 flattenWithOverlapS :: (Unbox a,Num a, Fractional t) 
-                    => Int
-                    -> Int 
-                    -> Signal t (U.Vector a)
-                    -> Signal t a 
-flattenWithOverlapS winSize o s@(Signal r l) | null l = error "A signal can't be empty : in flattenWithOverlapS"
-                                             | o == 0 = concatMapS U.toList s
-                                             | otherwise = 
-                                                  let r' = r / fromIntegral (winSize - o)
-                                                      h = headS s 
+                    => Int -- ^ Window size
+                    -> Int -- ^ Overlap
+                    -> Sampled t (U.Vector a) -- ^ Signal
+                    -> Sampled t a -- ^ Result and new sampling period
+flattenWithOverlapS winSize o s  | null (getSamples . getSignal $ s) = error "A signal can't be empty : in flattenWithOverlapS"
+                                 | o == 0 = Sampled r' (concatMapS U.toList . getSignal $ s)
+                                 | otherwise = 
+                                                  let h = headS (getSignal s) 
                                                       n = U.length h
                                                       index = U.fromList [0..o-1]
                                                       _flatten [] = []
@@ -74,9 +57,12 @@ flattenWithOverlapS winSize o s@(Signal r l) | null l = error "A signal can't be
                                                           combine b i x | i >= o = x + (b!(i-o))
                                                                         | otherwise = x
                                                           v = U.imap (combine b) a
-                                                      Signal _ news = appendListS (take o . U.toList $ h) (concatS . onSamples _flatten $ s)
+                                                      news = appendListS (take o . U.toList $ h) 
+                                                               (concatS . onSamples _flatten . getSignal $ s)
                                                   in 
-                                                  Signal r' news
+                                                  Sampled r' news
+      where 
+        r' = (period s) / fromIntegral (winSize - o)
 
 
 cossq m i x = let sq z = z * z 

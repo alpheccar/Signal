@@ -32,9 +32,9 @@ library
     MultiRate
     Spectrogram
     VAD
+    Internal
   other-modules:
     TypeAddition 
-    Internal
   build-depends:       
      base ==4.6.*,
      vector ==0.10.*,

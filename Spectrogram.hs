@@ -61,22 +61,22 @@ genPicture value w h (plotToPixel, pixelToPlot) = Just <$> do
 -- We display only up to sampling frequency / 2 because the spectrum is even.
 -- So, it allow a zooming a the frequency that matters instead of displaying redudant information
 spectrogram :: (Sample a, Show a) 
-            => Signal Time a 
-            -> Time
-            -> (Int -> Int -> a -> a)
-            -> Int 
+            => Sampled Time a -- ^ Signal 
+            -> Time -- ^ Duration
+            -> (Int -> Int -> a -> a) -- ^ Window
+            -> Int -- ^ Overlap
             -> StyledSignal Double Double
 spectrogram signal duration window overlap = 
-    let samplingF = samplingRate signal
+    let samplingF = rate signal
         winSize :: Int
         winExp = 8
         winSize = 1 `shiftL` winExp
         freqResolution = (getF samplingF) / fromIntegral winSize
         frames = frameWithWinAndOverlap winSize overlap window signal
         nbFrames :: Int
-        nbFrames = (floor (getT duration * getF (samplingRate frames)))
-        listOfSpectra = take nbFrames . getSamples . mapS (U.slice 0 (winSize `shiftR` 1)) . 
-                        mapS (_spectrum winExp (1.0 / getF samplingF)) $ frames 
+        nbFrames = (floor (getT duration * getF (rate frames)))
+        listOfSpectra = map (U.slice 0 (winSize `shiftR` 1)) . 
+                        map (_spectrum winExp (1.0 / getF samplingF)) . takeS nbFrames $ (getSignal frames) 
         theSpectrum = U.concat listOfSpectra
                       
         thePeak = U.maximum theSpectrum

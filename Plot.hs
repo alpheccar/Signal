@@ -28,6 +28,7 @@ module Plot(
     , PlotCoordinates(..)
     , PictureCoordinates(..)
     , CoordinateMapping(..)
+    , HasDoubleList(..)
     ) where 
 
 import Graphics.PDF
@@ -170,22 +171,32 @@ defaultPlotStyle =
 signalsWithStyle :: Bool -> [a] -> [[b]] -> PlotStyle a b -> StyledSignal a b 
 signalsWithStyle c times signals style = StyledSignal c times signals style
 
-data AnySignal t = forall b. HasDoubleRepresentation b => AS (Signal t b) 
+class HasDoubleList m where 
+  toDoubleList :: Int -> m -> [Double] 
+
+instance HasDoubleRepresentation b => HasDoubleList (Signal b) where 
+  toDoubleList nb = map toDouble . takeS nb 
+
+instance HasDoubleRepresentation b => HasDoubleList (Sampled t b) where 
+  toDoubleList nb = toDoubleList nb . getSignal 
+
+
+data AnySignal = forall b. HasDoubleList b => AS b
+
+instance HasDoubleList AnySignal where 
+  toDoubleList nb (AS s) = toDoubleList nb s
 
 -- | Create a plot description with discrete signals and a plot style
-discreteSignalsWithStyle :: HasDoubleRepresentation t 
-                         => Int
+discreteSignalsWithStyle :: Int
                          -> PlotStyle Double Double 
-                         -> Signal t t
-                         -> [AnySignal t] 
+                         -> AnySignal
+                         -> [AnySignal] 
                          -> StyledSignal Double Double
 discreteSignalsWithStyle nbPoints style timeSignal signals1  = 
-    let theTimes = {-# SCC "InternalTimes" #-} take nbPointsToDraw . map toDouble . getSamples $ timeSignal
+    let theTimes = {-# SCC "InternalTimes" #-} toDoubleList nbPointsToDraw $ timeSignal
         reduce = (nbPoints `quot` maximumPoints) - 1 
-        nbPointsToDraw = nbPoints 
-        convertSignal :: AnySignal t -> Signal t Double
-        convertSignal (AS s) = mapS toDouble s        
-        timedSignal s = take nbPointsToDraw . getSamples . convertSignal $ s
+        nbPointsToDraw = nbPoints        
+        timedSignal s = (toDoubleList nbPointsToDraw) s
         theCurves :: [[Double]]
         theCurves = {-# SCC theCurves #-} map timedSignal signals1
         --complex = True

@@ -122,7 +122,7 @@ traceValues s = do
                                               map (/ s) templ
                                         (lt,lp) = removeZeroAndLog lt' lp'
                                     let r = (log bma - log bmi) / fromIntegral (length lp)
-                                    drawing $ discreteSignalsWithStyle (length lt) plotStyle (fromListS r 0 lt)  [ AS (fromListS r 0 lp)]
+                                    drawing $ discreteSignalsWithStyle (length lt) plotStyle (AS $ fromListS 0 lt)  [ AS (fromListS 0 lp)]
             let (wi,he) = (\(x,y) -> (fromIntegral x, fromIntegral y)) $ viewerSize 
             if (signedFormat h) 
                 then do
@@ -163,8 +163,8 @@ traceSample s a = unsafePerformIO $ do
 {-# NOINLINE trace #-}
 trace :: (HasDoubleRepresentation a, Resolution a)
       => String 
-      -> Signal t a 
-      -> Signal t a 
+      -> Signal a 
+      -> Signal a 
 trace s = mapS (traceSample s)
 
 {-# NOINLINE myTake #-}
@@ -176,8 +176,8 @@ myTake _ [] = []
 {-# NOINLINE forceSignal #-}
 forceSignal :: (NFData a, Show a) 
             => Int 
-            -> Signal t a 
+            -> Signal a 
             -> IO ()
-forceSignal i (Signal _ s) = do
+forceSignal i (Signal s) = do
     let l = myTake i s
     l `deepseq` return ()

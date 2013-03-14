@@ -31,9 +31,9 @@ import Data.Int
 
 ltseF :: Sample a  
       => Int 
-      -> Signal t (U.Vector a) 
-      -> Signal t (U.Vector a) 
-ltseF n (Signal r s) = 
+      -> Signal (U.Vector a) 
+      -> Signal (U.Vector a) 
+ltseF n (Signal s) = 
     let (before,remaining) = splitAt n s
         _lste b (h:t) = 
             let (future,tl) = splitAt n t 
@@ -41,7 +41,7 @@ ltseF n (Signal r s) =
             in 
             valueMax:(_lste (tail before ++ [h]) t)
     in 
-    Signal r (_lste before remaining)
+    Signal (_lste before remaining)
 
 lstdD :: Int 
       -> U.Vector Double 
@@ -111,8 +111,8 @@ bandEnergyF (x :+ y) = amul x x + amul y y
 
 class VAD a where 
     vad :: (Sample a, FFT a) 
-        => Signal Time a 
-        -> Signal Time a
+        => Sampled Time a
+        -> Sampled Time a
 
 instance (SingI n, SingI s, SingI r, SingI (n + n)) => VAD (Fixed Int16 n s r) where 
     vad s = 
@@ -120,12 +120,12 @@ instance (SingI n, SingI s, SingI r, SingI (n + n)) => VAD (Fixed Int16 n s r) w
             overlap = 20
             n = 2
             framed = frameWithWinAndOverlap winSize overlap hann s
-            energy = mapS (U.map bandEnergyF . fft . U.map (:+ 0)) framed
+            energy = mapS (U.map bandEnergyF . fft . U.map (:+ 0)) (getSignal framed)
             noiseEnergy0 = U.generate winSize (const (fromDouble 0.00001))
             lt = ltseF n energy 
         in 
         --mapS (lstd winSize noiseEnergy0) lt
-        onSamples (getDecisionF winSize noiseEnergy0) (zipS lt (dropS n energy))   
+        Sampled (period framed) (onSamples (getDecisionF winSize noiseEnergy0) (zipS lt (dropS n energy)))  
 
 instance VAD Double where
     vad s = 
@@ -133,9 +133,9 @@ instance VAD Double where
             overlap = 20
             n = 2
             framed = frameWithWinAndOverlap winSize overlap hann s
-            energy = mapS (U.map bandEnergy . fft . U.map (:+ 0)) framed
+            energy = mapS (U.map bandEnergy . fft . U.map (:+ 0)) (getSignal framed)
             noiseEnergy0 = U.generate winSize (const (fromDouble 0.00001))
             lt = ltseF n energy 
         in 
         --mapS (lstd winSize noiseEnergy0) lt
-        onSamples (getDecisionD winSize noiseEnergy0) (zipS lt (dropS n energy))    
+        Sampled (period framed) (onSamples (getDecisionD winSize noiseEnergy0) (zipS lt (dropS n energy))) 

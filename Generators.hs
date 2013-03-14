@@ -11,20 +11,19 @@ import System.Random
 import Data.List.Stream
 
 uniformSamples :: Num a  
-               => a 
-               -> a
-               -> Signal a a 
-uniformSamples sampling start = Signal sampling (unif start)
+               => a -- ^ Sampling period 
+               -> a -- Starting value
+               -> Signal a 
+uniformSamples sampling start = Signal (unif start)
  where 
    unif !s = s : unif (s + sampling)
 
 
 randomSamples :: (Random a) 
-              => t 
-              -> a
+              => a
               -> a 
-              -> IO (Signal t a)
-randomSamples r mi ma = do 
+              -> IO (Signal a)
+randomSamples mi ma = do 
 	g <- newStdGen 
 	let l = randomRs (mi,ma) g
-	return $ Signal r $ l
+	return $ Signal l

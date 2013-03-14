@@ -54,10 +54,11 @@ restrictVectorToPOT v' | isPowerOfTwo (fromIntegral $ U.length v') = (n,v')
 
 _spectrum :: (FFT a, Sample a) 
           => (Int -> Int -> a -> a)
-          -> BSignal Time a 
+          -> Time
+          -> BSignal a 
           -> U.Vector Double
-_spectrum window d' = 
-    let Time t = samplingPeriod d'
+_spectrum window period d' = 
+    let Time t = period
         vd' = toVectorBS d'
         (n,d) = restrictVectorToPOT vd'
         l = 1 `shiftL` n
@@ -71,19 +72,19 @@ _spectrum window d' =
     U.map m . fft  $ complexd
 
 spectrum :: (FFT a, Sample a) 
-         => Time
-         -> (Int -> Int -> a -> a) 
-         -> Signal Time a  
-         -> Signal Frequency Double
-spectrum duration window signal = 
-    let f = (samplingRate signal)
+         => (Int -> Int -> a -> a)  -- ^ Window
+         -> Time -- ^ Duration of signal
+         -> Sampled Time a -- ^ Sampling period
+         -> Sampled Frequency Double -- ^ (frequency resolution, Output spectrum)
+spectrum window duration signal = 
+    let f = (rate signal)
         n = (getT duration) * (getF f) 
-        s = _spectrum window . takeS (floor n) $ signal 
+        s = _spectrum window (period signal) . takeVectorS (floor n) $ (getSignal signal) 
         nbSamples = U.length s 
         freqResolution = f / fromIntegral nbSamples
-        freqSignal = fromVectorS freqResolution s 
+        freqSignal = fromVectorS 0 s 
     in 
-    freqSignal
+    Sampled freqResolution freqSignal
 
 bitReverse :: Int -> Int -> Int
 bitReverse bitSize a = fromIntegral $ br (bitSize - 1) 0 (fromIntegral a)
@@ -224,8 +225,8 @@ instance (SingI n, SingI r, SingI (15 + n)) => FFT (Fixed Int16 n Sat r) where
     fft = genericfft False _fftFixed
     ifft = genericfft True _fftFixed
 
-testFFT :: (FFT a,Sample a) => Int -> Signal Time a -> U.Vector (Complex Double)
-testFFT n s = U.map (fmap toDouble) . fft . toVectorBS . mapBS (:+ 0) . takeS n $ s
+testFFT :: (FFT a,Sample a) => Int -> Signal a -> U.Vector (Complex Double)
+testFFT n s = U.map (fmap toDouble) . fft . toVectorBS . mapBS (:+ 0) . takeVectorS n $ s
 
-testFFT1 :: Sample a => Int -> Signal Time a -> U.Vector (Complex Double)
-testFFT1 n s = U.convert . F.fft . U.convert . toVectorBS . mapBS ((:+ 0) . toDouble) . takeS n $ s
+testFFT1 :: Sample a => Int -> Signal a -> U.Vector (Complex Double)
+testFFT1 n s = U.convert . F.fft . U.convert . toVectorBS . mapBS ((:+ 0) . toDouble) . takeVectorS n $ s

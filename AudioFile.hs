@@ -23,35 +23,36 @@ wave f c l samples = WAVE
 writeMono :: Sample a 
           => FilePath 
           -> Time -- ^ Sample duration
-          -> Signal Time a
+          -> Sampled Time a
           -> IO () 
 writeMono name duration signal = 
-	let d = floor (getT duration * getF (samplingRate signal))
-	    boundedSignal = take d . getSamples $ signal
+	let theRate = rate signal
+	    d = floor (getT duration * getF theRate)
+	    boundedSignal = takeS d  $ (getSignal signal)
 	    samples = map (\x -> [doubleToSample . toDouble $ x]) boundedSignal 
-	    w = wave (samplingRate signal) 1 d samples 
+	    w = wave theRate 1 d samples 
 	in 
 	putWAVEFile name w
 
-writeStereo :: (Sample a, Sample b) 
+writeStereo :: (Sample left, Sample right) 
             => FilePath 
             -> Time -- ^ Duration
-            -> Signal Time a -- ^ Left 
-            -> Signal Time b -- ^ Right
+            -> Sampled Time (left,right) 
             -> IO () 
-writeStereo name duration signall signalr = 
-	let d = floor (getT duration * getF (samplingRate signall))
-	    boundedSignal = take d . getSamples . zipS signall $ signalr
+writeStereo name duration signal = 
+	let theRate = rate signal
+	    d = floor (getT duration * getF theRate)
+	    boundedSignal = takeS d (getSignal signal)
 	    samples = map (\(x,y) -> [doubleToSample . toDouble $ x, doubleToSample . toDouble $ y]) boundedSignal 
-	    w = wave (samplingRate signall) 2 d samples 
+	    w = wave theRate 2 d samples 
 	in 
 	putWAVEFile name w
 
 readMono :: Sample a 
          => FilePath 
-         -> IO (Signal Time a)
+         -> IO (Sampled Time a)
 readMono name = do
 	w <- getWAVEFile name
 	let f = Frequency (fromIntegral $ waveFrameRate (waveHeader w)) 
 	    t = dual f
-	return . fromListS t 0 . map (fromDouble . sampleToDouble . head)  . waveSamples $ w
+	return $ Sampled t (fromListS 0 . map (fromDouble . sampleToDouble . head)  . waveSamples $ w)
