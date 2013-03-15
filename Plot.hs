@@ -122,8 +122,8 @@ data PlotStyle a b = PlotStyle {
                      , horizontalLabel :: Maybe String 
                      , verticalLabel:: Maybe String
                      , prologRsrc :: Int -> Int -> CoordinateMapping a b -> PDF (Maybe (PDFReference RawImage))
-                     , prolog :: Maybe (PDFReference RawImage) -> CoordinateMapping a b -> Draw ()
-                     , epilog :: CoordinateMapping a b -> Draw () 
+                     , prolog :: Int -> Int ->Maybe (PDFReference RawImage) -> CoordinateMapping a b -> Draw ()
+                     , epilog :: Int -> Int ->CoordinateMapping a b -> Draw () 
                      , signalStyles :: [SignalStyle]
                      , axis :: !Bool
                      , interpolation :: !Bool
@@ -158,8 +158,8 @@ defaultPlotStyle =
               , horizontalLabel = Just "s"
               , verticalLabel = Just "Energy"
               , prologRsrc = \_ -> \_ -> \_ -> return Nothing
-              , prolog = \_ -> \_ -> return ()
-              , epilog = const (return ()) 
+              , prolog = \_ -> \_ -> \_ -> \_ -> return ()
+              , epilog = \_ -> \_ -> \_ -> return ()
               , signalStyles = repeat (defaultSignalStyle 1.0 (Rgb 0.6 0.6 1.0))
               , axis = True
               , interpolation = True
@@ -173,6 +173,9 @@ signalsWithStyle c times signals style = StyledSignal c times signals style
 
 class HasDoubleList m where 
   toDoubleList :: Int -> m -> [Double] 
+
+instance HasDoubleRepresentation b => HasDoubleList [b] where 
+   toDoubleList nb = map toDouble . take nb
 
 instance HasDoubleRepresentation b => HasDoubleList (Signal b) where 
   toDoubleList nb = map toDouble . takeS nb 
@@ -527,6 +530,8 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
             action myRsrc wi hi = do
               let width = fromIntegral wi 
                   height = fromIntegral hi
+                  imgw = floor $ width - leftMargin s - rightMargin s 
+                  imgh = floor $ height - leftMargin s - rightMargin s
                   tickSize = 6
                   tickLabelSep = 5
                   hUnitSep = 5
@@ -577,7 +582,7 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                   addShape $ Rectangle (leftMargin s :+ bottomMargin s) ((width - rightMargin s) :+ (height - topMargin s))
                   setAsClipPath
                   let R imgR roR = myRsrc
-                  (prolog s) roR (pt,ippt)
+                  (prolog s) imgw imgh roR (pt,ippt)
   
                   case imgR of 
                       Nothing  -> mapM_ (drawSignal s pt) (zip (timed signals) (cycle $ signalStyles s))
@@ -606,7 +611,7 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
               withNewContext $ do
                   addShape $ Rectangle (leftMargin s :+ bottomMargin s) ((width - rightMargin s) :+ (height - topMargin s))
                   setAsClipPath
-                  (epilog s) (pt,ippt)
+                  (epilog s) imgw imgh (pt,ippt)
               
         in
         let rsrc wi hi | complex = do 
@@ -618,7 +623,7 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                                  iw a = fromDouble $ toDouble a /  rw * (tb - ta) + ta 
                                  ih a = fromDouble $ toDouble a /  rh * (yb - ya) + ya
                                  ippt (a :+ b) = (iw a,ih b)
-                             pr <- (prologRsrc s) wi hi (ppt,ippt)
+                             pr <- (prologRsrc s) (floor rw) (floor rh) (ppt,ippt)
                              r <- runPixmap (floor rw) (floor rh) $ do
                                        mapM_ (drawSignal s ppt . simplifySignal ppt) $ (zip (timed signals) (cycle $ signalStyles s))
                                        --setColor (Rgb 1.0 0 0) 1.0 
@@ -640,7 +645,7 @@ instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepr
                                iw a = fromDouble $ toDouble a /  rw * (tb - ta) + ta 
                                ih a = fromDouble $ toDouble a /  rh * (yb - ya) + ya
                                ippt (a :+ b) = (iw a,ih b)
-                           pr <- (prologRsrc s) wi hi (ppt,ippt)
+                           pr <- (prologRsrc s) (floor rw) (floor rh) (ppt,ippt)
                            return (R Nothing $! pr)
         in
         (rsrc, action)

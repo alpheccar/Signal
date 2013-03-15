@@ -30,6 +30,7 @@ import Spectrogram
 import VAD
 import Data.List.Stream((++))
 import System.Timeout
+import Noise
 
 import qualified Debug.Trace as T
 
@@ -125,18 +126,25 @@ playWav = do
   s <- readMono "Test.wav" :: IO (Sampled Time Double)
   playS (Time 2.0) s
 
+testHist = do 
+    r <- randomSamples (fromDouble $ -0.01) (fromDouble 0.01) :: IO (Signal Double)
+    let l = takeS 10000 r
+    histogram l 
+
 -- PROBLEM
 wavSpect = do
   s0 <- readMono "Test.wav" :: IO (Sampled Time (Fixed Int16 10 Sat NR))
   r <- randomSamples (fromDouble $ -0.01) (fromDouble 0.01)
-  let duration = 6.0
-      theTimes = {-# SCC "theTimes" #-} uniformSamples (period s0) 0.0
+  let p = period ({-# SCC "s0" #-} s0)
+      ra = rate s0
+      duration = 6.0
+      theTimes = {-# SCC "theTimes" #-} uniformSamples p 0.0
       ampl = mapS (\t -> (fromDouble $ 1+0.2*sin(2*pi*getT t))) theTimes
-      s = {-# SCC "theSignal" #-} zipWithS (+) (getSignal s0) (zipWithS (*) ampl r)
-      spect = {-# SCC "theSpectrogram" #-} spectrogram (Sampled (period s0) (mapS toDouble s)) (Time duration) hann 20
-      v = {-# SCC "theVad" #-} vad $ Sampled (period s0) s
+      s = {-# SCC "theSignal" #-} zipWithS (+) (getSignal s0) (zipWithS (*) ampl ({-# SCC "r" #-} r))
+      spect = {-# SCC "theSpectrogram" #-} spectrogram (Sampled p (mapS toDouble s)) (Time duration) hann 20
+      v = {-# SCC "theVad" #-} vad $ Sampled p s
       theFrames = {-# SCC "theFrames" #-} uniformSamples (period v) 0
-      pict = {-# SCC "pict" #-} discreteSignalsWithStyle (floor $ duration * getF (rate s0))  plotStyle 
+      pict = {-# SCC "pict" #-} discreteSignalsWithStyle (floor $ duration * getF ra)  plotStyle 
                                 (AS theTimes) [ AS s]
       pictv = {-# SCC "pictv" #-} discreteSignalsWithStyle (floor $ duration / getT (period v))  
                                     ( plotStyle {title = Just "VAD" , interpolation = False})

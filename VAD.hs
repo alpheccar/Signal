@@ -57,7 +57,7 @@ theTotal :: (SingI r, SingI s, SingI n)
          => Fixed Int32 n s r 
          -> U.Vector (Fixed Int32 n s r) 
          -> U.Vector (Fixed Int32 n s r) 
-         -> Fixed Int64 n s r 
+         -> Fixed Int40 n s r 
 theTotal m lste noiseEnergy = 
            let  d a b | b == 0 = convert m 
                       | otherwise = convert a / convert b

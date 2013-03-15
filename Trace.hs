@@ -87,7 +87,7 @@ traceValues s = do
                 nullValues | null nulls = 0 :: Double
                            | otherwise = 100*fromIntegral (length nulls) / fromIntegral (length l)
                 drawHist bmi bma l h label theTitle = do
-                            let targetLine (ptF,_) = do 
+                            let targetLine wi hi (ptF,_) = do 
                                     withNewContext $ do
                                         strokeColor $ Rgb 1.0 0.8 0.8
                                         let start = (log bma) - (log bmi)

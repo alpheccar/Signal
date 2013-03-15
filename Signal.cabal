@@ -32,9 +32,10 @@ library
     MultiRate
     Spectrogram
     VAD
-    Internal
+    Noise
   other-modules:
-    TypeAddition 
+    TypeAddition
+    Internal 
   build-depends:       
      base ==4.6.*,
      vector ==0.10.*,

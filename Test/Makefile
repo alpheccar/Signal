@@ -5,7 +5,7 @@ all:
 	ghc -o thetest -O -rtsopts -XDataKinds -XTypeOperators -XConstraintKinds -package-db ../dist/package.conf.inplace Test.hs
 
 run:
-	./thetest +RTS -K120M -hc -p  -RTS
+	./thetest +RTS  -K120M -hr  -RTS
 	hp2ps -c thetest.hp
 
 clean: 

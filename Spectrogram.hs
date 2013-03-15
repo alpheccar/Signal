@@ -36,8 +36,8 @@ _spectrum n t d =
     in 
     U.map m . fft  $ complexd
 
-prologSpect l b Nothing _ = return () 
-prologSpect l b (Just r) _ = do
+prologSpect l b wi hi Nothing _ = return () 
+prologSpect l b wi hi (Just r) _ = do
     withNewContext $ do
         applyMatrix $ translate (l :+ b)
         drawXObject r
