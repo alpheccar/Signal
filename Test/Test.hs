@@ -97,14 +97,12 @@ bigPict = do
 
 
     --print $ takeS 160 mySignal
-    display $ discreteSignalsWithStyle (floor $ getT dr * getF f)  plotStyle (AS theTimes) [ AS mySignal]
+    display $ plotSignals (floor $ getT dr * getF f)  tr [ AS mySignal]
 
 wav = do 
   s <- readMono "Test.wav" :: IO (Sampled Time Double)
   let theTimes = uniformSamples (period s) 0.0
-  display $ discreteSignalsWithStyle (floor $ 2.0 * getF (rate s))  plotStyle 
-                 (AS theTimes) 
-                 [ AS s]
+  display $ plotSignals (floor $ 2.0 * getF (rate s))  (period s) [ AS s]
 
 myTest = do
   --s <- readMono "Test.wav" :: IO (Signal Time Double)
@@ -119,7 +117,7 @@ myTest = do
   display $ discreteSignalsWithStyle (floor $ 6.0 / getT sv)  plotStyle { horizontalBounds = Just (0,6.0)
                                                                         , verticalBounds = Just (0,6.0)
                                                                         }
-                (AS theTimes) [ AS theTimes]
+                [ AS theTimes]
 
 
 playWav = do 
@@ -129,7 +127,20 @@ playWav = do
 testHist = do 
     r <- randomSamples (fromDouble $ -0.01) (fromDouble 0.01) :: IO (Signal Double)
     let l = takeS 10000 r
-    histogram l 
+    display $ histogram l 
+
+testQuant = do 
+  let amplitude = toDouble (smallestValue (undefined :: Fixed Int16 8 Sat NR) )* 4
+  r <- randomSamples (fromDouble $ -amplitude) (fromDouble amplitude) :: IO (Signal (Fixed Int16 8 Sat NR))
+  let theTimes = uniformSamples (Time 1.0) 0.0 :: Signal Time
+      a = Amp 0.26
+  qn <- quantizationNoise r a 
+  let nb = 10000
+      spect = spectrum  (noWindow) (Time $ fromIntegral nb) $ Sampled 1 qn
+      frequencies = uniformSamples (period spectruma) 0.0
+      h = histogram (takeS 10000 qn)
+      s = plotSpectrum 8192 [ AS spect] 
+  display $ Vertical 0 [h,s] 
 
 -- PROBLEM
 wavSpect = do
@@ -144,11 +155,8 @@ wavSpect = do
       spect = {-# SCC "theSpectrogram" #-} spectrogram (Sampled p (mapS toDouble s)) (Time duration) hann 20
       v = {-# SCC "theVad" #-} vad $ Sampled p s
       theFrames = {-# SCC "theFrames" #-} uniformSamples (period v) 0
-      pict = {-# SCC "pict" #-} discreteSignalsWithStyle (floor $ duration * getF ra)  plotStyle 
-                                (AS theTimes) [ AS s]
-      pictv = {-# SCC "pictv" #-} discreteSignalsWithStyle (floor $ duration / getT (period v))  
-                                    ( plotStyle {title = Just "VAD" , interpolation = False})
-                                      (AS theFrames) [ AS v]
+      pict = {-# SCC "pict" #-} plotSignals (floor $ duration * getF ra)  p [ AS s]
+      pictv = {-# SCC "pictv" #-} plotSignals (floor $ duration / getT (period v))  (period v) [ AS v]
   display $ {-# SCC "Vertical" #-} Vertical 0 [pict,pictv,spect]
 
 debugFFT = do 
@@ -157,7 +165,7 @@ debugFFT = do
       spectruma = spectrum (noWindow) (Time 1.0) s
       f = rate s
       frequencies = uniformSamples (period spectruma) 0.0
-      pictb = discreteSignalsWithStyle (floor $ getF f / getF (period spectruma)) fftStyle (AS frequencies) [ AS spectruma ]  
+      pictb = plotSpectrum (floor $ getF f / getF (period spectruma)) [ AS spectruma ]  
   display pictb
 
 -- PROBLEM
@@ -167,7 +175,7 @@ overlapTest = do
       nb = 1000 
       s1 = frameWithWinAndOverlap 100 50 hann (Sampled 1 s)
       s2 = flattenWithOverlapS 100 50 s1
-  display $ discreteSignalsWithStyle nb plotStyle (AS theTimes) [AS s2]
+  display $ plotSignals nb (period s2)  [AS s2]
 
 lightBlue = Rgb 0.6 0.6 1.0
 lightRed = Rgb 1.0 0.6 0.6
@@ -192,13 +200,12 @@ fftStyle =
         	                          ]
         	         }
 
-pict = discreteSignalsWithStyle (floor $ getT dr * getF samplingFrequency) 
-                                                                      plotStyle (AS theTimes) [ AS mySignalA
-                                                                                              , AS mySignalC
-                                                                                              , AS mySignalD
-                                                                                              , AS mySignalE] 
+pict = display $ plotSignals (floor $ getT dr * getF samplingFrequency) sp [ AS mySignalA
+                                                                           , AS mySignalC
+                                                                           , AS mySignalD
+                                                                           , AS mySignalE] 
 
-pictwin = display $ discreteSignalsWithStyle 100 plotStyle (AS $ fromListS 0 ([0..99] :: [Int])) [AS winv] 
+pictwin = display $ plotSignals 100 (Time 1.0) [AS winv] 
 
 linearSignal :: forall a. Sample a => Signal a 
 linearSignal = mapS (\t -> let x = (fromDouble $ getT t) in x*x) theTimes
@@ -209,10 +216,10 @@ linearS = linearSignal
 la :: Signal (Fixed Int16 4 Sat NR)
 la = linearSignal
 
-pictramp = display $ discreteSignalsWithStyle (floor $ getT dr * getF samplingFrequency)
-                                                                      plotStyle (AS theTimes) [ AS linearS
-                                                                                              , AS la
-                                                                                              ]
+pictramp = display $ plotSignals  (floor $ getT dr * getF samplingFrequency) (Time 1.0) [ AS linearS
+                                                                                        , AS la
+                                                                                        ]
+
 randomSig :: (Show a, NFData a, Random a,Sample a, Resolution a) => a -> a -> IO ()
 randomSig a b = do 
     clearTrace
@@ -248,11 +255,13 @@ spectrume = spectrum noWindow dr $ Sampled sp (mapS toDouble mySignalE)
 frequencies :: Signal Frequency
 frequencies = uniformSamples (period spectruma) 0.0
 
-pictb = discreteSignalsWithStyle (nbSamples spectruma (Frequency 100.0))  fftStyle 
-                                                                            (AS frequencies) [ AS spectruma 
-                                                                                             , AS spectrumc 
-                                                                                             , AS spectrumd
-                                                                                             , AS spectrume]  
+
+pictb = display $ plotSpectrum nb  [ AS spectruma 
+                                   , AS spectrumc 
+                                   , AS spectrumd
+                                   , AS spectrume]  
+    where 
+      nb = (nbSamples spectruma (Frequency 100.0))
 
 main = do 
   wavSpect

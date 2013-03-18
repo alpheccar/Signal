@@ -29,6 +29,10 @@ module Plot(
     , PictureCoordinates(..)
     , CoordinateMapping(..)
     , HasDoubleList(..)
+    , ticksWithTime
+    , ticksWithPhase
+    , plotSignals
+    , plotSpectrum
     ) where 
 
 import Graphics.PDF
@@ -51,6 +55,7 @@ import Data.Bits
 import Data.List(sortBy,unfoldr,sort)
 import Data.Function(on)
 import Data.STRef
+import Common
 
 import Debug.Trace
 debug a = trace (show a) a
@@ -104,6 +109,52 @@ drawStringLabel (LabelStyle fs j o) s x y w h = do
 defaultSignalStyle :: Double -> Color -> SignalStyle 
 defaultSignalStyle opacity color = SignalStyle color 1.0 opacity
 
+-- | Label for time
+ticksWithTime :: Time -> (Double -> String)
+ticksWithTime t d = printf "%.2f" (d * getT t)
+
+ticksWithPhase :: Int -> (Double -> String)
+ticksWithPhase nb n = printf "%.2f pi" (2 * n / fromIntegral nb :: Double)
+
+plotSignals :: Int -- ^ Nb points
+            -> Time -- ^ Sampling period
+            -> [AnySignal] -- ^ Signals
+            -> StyledSignal Double Double
+plotSignals nb sp l = discreteSignalsWithStyle nb (plotStyle {horizontalTickRepresentation = ticksWithTime sp}) l
+ where 
+  lightBlue = Rgb 0.4 0.4 1.0
+  lightRed = Rgb 1.0 0.4 0.4
+  lightGreen = Rgb 0.4 1.0 0.4
+  lightYellow = Rgb 1.0 1.0 0.4
+  plotStyle =  (defaultPlotStyle { title = Just "Temporal"
+                                 , signalStyles = [ defaultSignalStyle 0.8 lightBlue
+                                                  , defaultSignalStyle 0.8 lightRed
+                                                  , defaultSignalStyle 0.8 lightGreen
+                                                  , defaultSignalStyle 0.8 lightYellow
+                                                  ]
+                                 , verticalLabel = Just "Amplitude"
+                                 , horizontalLabel = Just "s"
+                                 }) 
+
+plotSpectrum :: Int -- ^ Nb points
+             -> [AnySignal] -- ^ Signals
+             -> StyledSignal Double Double
+plotSpectrum nb l = discreteSignalsWithStyle nb (plotStyle {horizontalTickRepresentation = ticksWithPhase nb}) l
+ where 
+  lightBlue = Rgb 0.4 0.4 1.0
+  lightRed = Rgb 1.0 0.4 0.4
+  lightGreen = Rgb 0.4 1.0 0.4
+  lightYellow = Rgb 1.0 1.0 0.4
+  plotStyle =  (defaultPlotStyle { title = Just "Frequential"
+                                 , signalStyles = [ defaultSignalStyle 0.8 lightBlue
+                                                  , defaultSignalStyle 0.8 lightRed
+                                                  , defaultSignalStyle 0.8 lightGreen
+                                                  , defaultSignalStyle 0.8 lightYellow
+                                                  ]
+                                 , verticalLabel = Just "Energy"
+                                 , horizontalLabel = Just "phase"
+                                 }) 
+
 type PictureCoordinates a b = (a,b) -> Point 
 type PlotCoordinates a b = Point -> (a,b)
 type CoordinateMapping a b = (PictureCoordinates a b, PlotCoordinates a b)
@@ -138,7 +189,7 @@ tenTicks ma mb = map (\t -> (fromIntegral t)/(fromIntegral 10)*(mb-ma) + ma) ([0
 -- | Formatting function for floats
 simpleFloat :: HasDoubleRepresentation a => a -> String
 simpleFloat a = 
-    let s = printf "%1.2f" (toDouble a) 
+    let s = printf "%1.2g" (toDouble a) 
     in 
     s
 
@@ -192,11 +243,10 @@ instance HasDoubleList AnySignal where
 -- | Create a plot description with discrete signals and a plot style
 discreteSignalsWithStyle :: Int
                          -> PlotStyle Double Double 
-                         -> AnySignal
                          -> [AnySignal] 
                          -> StyledSignal Double Double
-discreteSignalsWithStyle nbPoints style timeSignal signals1  = 
-    let theTimes = {-# SCC "InternalTimes" #-} toDoubleList nbPointsToDraw $ timeSignal
+discreteSignalsWithStyle nbPoints style signals1  = 
+    let theTimes = {-# SCC "InternalTimes" #-} toDoubleList nbPointsToDraw $ ([0,1..] :: [Int])
         reduce = (nbPoints `quot` maximumPoints) - 1 
         nbPointsToDraw = nbPoints        
         timedSignal s = (toDoubleList nbPointsToDraw) s
