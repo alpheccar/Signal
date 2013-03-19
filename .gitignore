@@ -13,3 +13,5 @@ Test/thetest
 Test/MiniTest.hs
 Test/buganalysis.hs
 Test/log.txt
+Test/debug.nb
+Test/debugs.dat

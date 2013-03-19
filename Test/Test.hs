@@ -31,6 +31,9 @@ import VAD
 import Data.List.Stream((++))
 import System.Timeout
 import Noise
+import System.IO
+import Filter
+import Math.Polynomial 
 
 import qualified Debug.Trace as T
 
@@ -73,6 +76,14 @@ mySignalE:: Signal (Fixed Int16 14 Unsat NR)
 mySignalE = genericSignal
 
 mySignalB = mapS (\t -> 0.8*cos (2*pi*getT t*30)*(1.0 + 0.8*cos(2*pi*getT t*10))) theTimes
+
+testFIR = 
+  let fi = FIR (poly LE [0.5,0.5]) :: FIR Double Double
+      s = fromListS 0 (replicate 100 1) :: Signal Double 
+      fs = (transferFunction fi) s
+      p = plotSignals 1000 1 [AS fs]
+  in
+  display p
 
 winv :: Signal Double
 winv = 
@@ -129,18 +140,42 @@ testHist = do
     let l = takeS 10000 r
     display $ histogram l 
 
+-- For testing ONLY
+data Amp f = Amp f 
+
+instance Structure Amp where 
+    doubleVersion (Amp f) = Amp (toDouble f)
+    transferFunction (Amp f) = mapS (f * )
+
+writeSignal :: [Double] -> FilePath -> IO ()
+writeSignal l f = do 
+    h <- openFile f WriteMode 
+    writeS h l 
+    hClose h 
+ where 
+  writeS h ([]) = return ()
+  writeS h (a:b) = do 
+    hPutStrLn h (show a)
+    writeS h b 
+
 testQuant = do 
-  let amplitude = toDouble (smallestValue (undefined :: Fixed Int16 8 Sat NR) )* 4
+  let amplitude = 1.0
   r <- randomSamples (fromDouble $ -amplitude) (fromDouble amplitude) :: IO (Signal (Fixed Int16 8 Sat NR))
   let theTimes = uniformSamples (Time 1.0) 0.0 :: Signal Time
-      a = Amp 0.26
-  qn <- quantizationNoise r a 
+      s = mapS (\t -> fromDouble $ 0.5*sin(2*pi*getT t / 1000) ) theTimes
+      --ts = zipWithS (+) r s
+      a = Amp (smallestValue (undefined :: Fixed Int16 8 Sat NR))
+  qn <- quantizationNoise s a 
   let nb = 10000
-      spect = spectrum  (noWindow) (Time $ fromIntegral nb) $ Sampled 1 qn
+      nbf = 8192
+      spect = spectrum  (noWindow) nbf $ Sampled 1 qn
       frequencies = uniformSamples (period spectruma) 0.0
-      h = histogram (takeS 10000 qn)
-      s = plotSpectrum 8192 [ AS spect] 
-  display $ Vertical 0 [h,s] 
+      h = histogram (takeS nb qn)
+      s = plotSpectrum nbf [ AS spect] 
+      n = plotSignals nb 1.0 [AS qn]
+      debugS = takeS nbf qn 
+  --writeSignal debugS "debugs.dat"
+  display $ Vertical 0 [h,s,n] 
 
 -- PROBLEM
 wavSpect = do
@@ -162,7 +197,7 @@ wavSpect = do
 debugFFT = do 
   s <- readMono "Test.wav" :: IO (Sampled Time Double)
   let dr = Time 1.0
-      spectruma = spectrum (noWindow) (Time 1.0) s
+      spectruma = spectrum (noWindow) (floor $ rate s) s
       f = rate s
       frequencies = uniformSamples (period spectruma) 0.0
       pictb = plotSpectrum (floor $ getF f / getF (period spectruma)) [ AS spectruma ]  
@@ -233,24 +268,24 @@ randomSig a b = do
     --display $ discreteSignalsWithStyle (floor $ getT duration * getF samplingFrequency) plotStyle theTimes [AS $ trace "test" s]
 
 spectruma :: Sampled Frequency Double
-spectruma = spectrum  (noWindow) dr $ Sampled sp mySignalA
+spectruma = spectrum  (noWindow) (floor (getT dr / getT sp)) $ Sampled sp mySignalA
 
 spectrumConst :: Sampled Frequency Double
-spectrumConst = spectrum (noWindow) dr $ Sampled sp (mapS toDouble aConstSignal)  
+spectrumConst = spectrum (noWindow) (floor (getT dr / getT sp)) $ Sampled sp (mapS toDouble aConstSignal)  
 
 -- To debug : fixed point typing problem
 spectrumc :: Sampled Frequency Double
-spectrumc = spectrum noWindow dr $ Sampled sp (mapS toDouble mySignalC)  
+spectrumc = spectrum noWindow (floor (getT dr / getT sp)) $ Sampled sp (mapS toDouble mySignalC)  
 
 -- To debug : fixed point typing problem
 spectrumd :: Sampled Frequency Double
-spectrumd = spectrum noWindow dr $ Sampled sp mySignalD  
+spectrumd = spectrum noWindow (floor (getT dr / getT sp)) $ Sampled sp mySignalD  
 
 spectrumb :: Sampled Frequency Double
-spectrumb = spectrum noWindow dr $ Sampled sp mySignalB
+spectrumb = spectrum noWindow (floor (getT dr / getT sp)) $ Sampled sp mySignalB
 
 spectrume:: Sampled Frequency Double
-spectrume = spectrum noWindow dr $ Sampled sp (mapS toDouble mySignalE)
+spectrume = spectrum noWindow (floor (getT dr / getT sp)) $ Sampled sp (mapS toDouble mySignalE)
 
 frequencies :: Signal Frequency
 frequencies = uniformSamples (period spectruma) 0.0

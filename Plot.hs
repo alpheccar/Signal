@@ -136,7 +136,7 @@ plotSignals nb sp l = discreteSignalsWithStyle nb (plotStyle {horizontalTickRepr
                                  , horizontalLabel = Just "s"
                                  }) 
 
-plotSpectrum :: Int -- ^ Nb points
+plotSpectrum :: Int -- ^ Total Nb points
              -> [AnySignal] -- ^ Signals
              -> StyledSignal Double Double
 plotSpectrum nb l = discreteSignalsWithStyle nb (plotStyle {horizontalTickRepresentation = ticksWithPhase nb}) l
@@ -153,6 +153,7 @@ plotSpectrum nb l = discreteSignalsWithStyle nb (plotStyle {horizontalTickRepres
                                                   ]
                                  , verticalLabel = Just "Energy"
                                  , horizontalLabel = Just "phase"
+                                 , horizontalBounds =Just (0, fromIntegral nb)
                                  }) 
 
 type PictureCoordinates a b = (a,b) -> Point 

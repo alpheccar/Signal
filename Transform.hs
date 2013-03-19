@@ -41,7 +41,7 @@ import TypeAddition
 
 --import Debug.Trace
 
-isPowerOfTwo :: Word16 -> Bool
+isPowerOfTwo :: Word32 -> Bool
 isPowerOfTwo a = (a /= 0) && ((a .&. (a-1)) == 0)
 
 --debug a = trace (show a) a
@@ -54,12 +54,10 @@ restrictVectorToPOT v' | isPowerOfTwo (fromIntegral $ U.length v') = (n,v')
 
 _spectrum :: (FFT a, Sample a) 
           => (Int -> Int -> a -> a)
-          -> Time
           -> BSignal a 
           -> U.Vector Double
-_spectrum window period d' = 
-    let Time t = period
-        vd' = toVectorBS d'
+_spectrum window d' = 
+    let vd' = toVectorBS d'
         (n,d) = restrictVectorToPOT vd'
         l = 1 `shiftL` n
         complexd = U.map (:+ 0) . U.imap (window l) $ d
@@ -67,19 +65,18 @@ _spectrum window period d' =
             let x' = toDouble x 
                 y' = toDouble y 
             in
-            t*(x'*x' + y'*y') / fromIntegral l
+            (x'*x' + y'*y') / fromIntegral l
     in 
     U.map m . fft  $ complexd
 
 spectrum :: (FFT a, Sample a) 
          => (Int -> Int -> a -> a)  -- ^ Window
-         -> Time -- ^ Duration of signal
+         -> Int -- ^ Duration of signal
          -> Sampled Time a -- ^ Sampling period
          -> Sampled Frequency Double -- ^ (frequency resolution, Output spectrum)
-spectrum window duration signal = 
+spectrum window nbPoints signal = 
     let f = (rate signal)
-        n = (getT duration) * (getF f) 
-        s = _spectrum window (period signal) . takeVectorS (floor n) $ (getSignal signal) 
+        s = _spectrum window . takeVectorS nbPoints $ (getSignal signal) 
         nbSamples = U.length s 
         freqResolution = f / fromIntegral nbSamples
         freqSignal = fromVectorS 0 s 

@@ -5,7 +5,6 @@ module Noise(
       histogram
     , Structure(..)
     , quantizationNoise
-    , Amp(..)
     ) where 
 
 import qualified Statistics.Sample.Histogram as H
@@ -81,9 +80,4 @@ quantizationNoise r structure = do
         quadraticError a b = (a-b)*(a-b) 
     return $ zipWithS quadraticError ds fs
 
--- For testing ONLY
-data Amp f = Amp f 
 
-instance Structure Amp where 
-    doubleVersion (Amp f) = Amp (toDouble f)
-    transferFunction (Amp f) = mapS (*f)
