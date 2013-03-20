@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE GADTs #-}
 module Main(
 	  main
 	
@@ -77,13 +78,25 @@ mySignalE = genericSignal
 
 mySignalB = mapS (\t -> 0.8*cos (2*pi*getT t*30)*(1.0 + 0.8*cos(2*pi*getT t*10))) theTimes
 
-testFIR = 
-  let fi = FIR (poly LE [0.5,0.5]) :: FIR Double Double
-      s = fromListS 0 (replicate 100 1) :: Signal Double 
+testFIR = do
+  let nb = 50
+      fi = FIRD (poly LE (replicate nb (1.0 / fromIntegral nb))) :: FIR Double Double Double
+      fif = FIR (poly LE (map fromDouble $ replicate nb (1.0 / fromIntegral nb))) :: FIR ((Fixed Int16 8 Sat NR),(Fixed Int16 8 Sat NR)) (Fixed Int16 8 Sat NR) (Fixed Int16 8 Sat NR)
+      s = fromListS 0 (replicate 100 1.0) :: Signal Double 
+      --s = fromListS 0 [1] :: Signal Double
       fs = (transferFunction fi) s
       p = plotSignals 1000 1 [AS fs]
-  in
-  display p
+      amplitude = 1.0
+  r <- randomSamples (fromDouble $ -amplitude) (fromDouble amplitude) :: IO (Signal (Fixed Int16 8 Sat NR))
+  let theTimes = uniformSamples (Time 1.0) 0.0 :: Signal Time
+      s = mapS (\t -> fromDouble $ 0.5*sin(2*pi*getT t / 1000) ) theTimes
+  qn <- quantizationNoise s fif  
+  let nbPoints = 256
+      h = histogram (takeS nbPoints qn)
+      spect = spectrum  (noWindow) nbPoints $ Sampled 1 qn
+      s = plotSpectrum nbPoints [ AS spect] 
+  display $ Vertical 0 [p,h, s]
+  --print . takeS (nb+5) $ fs
 
 winv :: Signal Double
 winv = 
@@ -141,7 +154,8 @@ testHist = do
     display $ histogram l 
 
 -- For testing ONLY
-data Amp f = Amp f 
+data Amp f i o where 
+ Amp :: f -> Amp f f f 
 
 instance Structure Amp where 
     doubleVersion (Amp f) = Amp (toDouble f)

@@ -62,17 +62,12 @@ histogram l = do
     discreteSignalsWithStyle (U.length s) style [] 
 
 class Structure m where 
-    doubleVersion :: Sample f => m f -> m Double 
-    transferFunction :: Sample f => m f -> Signal f -> Signal f 
+    doubleVersion :: (Sample i, Sample o) => m f i o -> m Double Double Double
+    transferFunction :: (Sample i, Sample o) => m f i o -> Signal i -> Signal o        
 
-signalType :: m f 
-           -> Signal f 
-           -> Signal f 
-signalType _ a = a           
-
-quantizationNoise :: (Structure m , Sample f, Random f) 
-                  => Signal f
-                  -> m f 
+quantizationNoise :: (Structure m , Random i, Sample o, Sample i) 
+                  => Signal i
+                  -> m p i o 
                   -> IO (Signal Double)
 quantizationNoise r structure = do
     let ds = transferFunction (doubleVersion structure) (mapS toDouble r) 

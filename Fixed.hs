@@ -11,6 +11,8 @@ module Fixed(
     , HasDoubleRepresentation(..)
     , FixedPoint(..)
     , Resolution(..)
+    , AMulConstraint(..)
+    , ConvertConstraint(..)
     , withSaturation 
     , withoutSaturation
     , withRounding
@@ -222,9 +224,11 @@ amulc :: (SingI na,SingI nb, SingI s, AMulConstraint a b,Num (Fixed b (na+nb) s 
       -> Complex (Fixed b (na+nb) s r)
 amulc (xr :+ xi) (yr :+ yi) = (amul xr yr - amul xi yi) :+ (amul xr yi + amul xi yr)
 
+type ConvertConstraint a b = (Integral a, Bits a, Bits (SuperInt b), NumberInfo a, NumberInfo b, SaturateConstraint b)
+
 class Conversion a b where 
   {-# INLINE convert #-}
-  convert :: (SingI na, SingI nb, SingI sb, SingI r, Integral a, Bits a, Bits (SuperInt b), NumberInfo a, NumberInfo b, SaturateConstraint b) 
+  convert :: (SingI na, SingI nb, SingI sb, SingI r, ConvertConstraint a b) 
           => Fixed a na sa r
           -> Fixed b nb sb r
   convert fa@(Fixed a) = fb
