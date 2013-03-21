@@ -72,7 +72,6 @@ quantizationNoise :: (Structure m , Random i, Sample o, Sample i)
 quantizationNoise r structure = do
     let ds = transferFunction (doubleVersion structure) (mapS toDouble r) 
         fs = mapS toDouble . transferFunction structure $ r
-        quadraticError a b = (a-b)*(a-b) 
-    return $ zipWithS quadraticError ds fs
+    return $ zipWithS (-) ds fs
 
 

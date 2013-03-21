@@ -6,6 +6,7 @@
 module Filter(
       FIR(..)
     , bode
+    , phasePlot
     ) where 
 
 import Signal
@@ -18,6 +19,7 @@ import SpecialInt
 import Data.Bits
 import Plot
 import Data.Complex
+import Text.Printf
 
 import Debug.Trace
 
@@ -82,15 +84,37 @@ instance Structure FIR where
         filterDWith c s 
 
 bode :: (Sample o,Sample i)
-     => FIR p i o -> IO () 
+     => FIR p i o -> StyledSignal Double Double
 bode f = 
     let fd = polyRepresentation f
         log10 x = log x / log 10
         polyF = evalPoly (fmap (:+ 0) fd)
         transferFunction = \t -> 20 * log10 (magnitude . polyF . cis $ -t) 
         dw = 0.01
-        values = map transferFunction [0,dw..2*pi]
+        values = map transferFunction [0,dw..pi]
+        nb = length values
+        ticksWithPhase n = printf "%.2f pi" (n / fromIntegral nb :: Double)
     in 
-    display $ (plotSpectrum (length values) [ AS $ fromListS 0 values]) 
-                 `withNewStyle` (\s -> s { verticalLabel = Just "Gain"
-                                         , title = Just "Bode Plot"})
+    (plotSpectrum nb [ AS $ fromListS 0 values]) 
+                 `withNewStyle` (\s -> s { verticalLabel = Just "Filter Gain (dB)"
+                                         , title = Just "Bode Plot"
+                                         , horizontalTickRepresentation = ticksWithPhase
+                                         })
+
+phasePlot :: (Sample o,Sample i)
+     => FIR p i o -> StyledSignal Double Double
+phasePlot f = 
+    let fd = polyRepresentation f
+        log10 x = log x / log 10
+        polyF = evalPoly (fmap (:+ 0) fd)
+        transferFunction = \t -> phase . polyF . cis $ -t
+        dw = 0.01
+        values = map transferFunction [0,dw..pi]
+        nb = length values
+        ticksWithPhase n = printf "%.2f pi" (n / fromIntegral nb :: Double)
+    in 
+    (plotSpectrum nb [ AS $ fromListS 0 values]) 
+                 `withNewStyle` (\s -> s { verticalLabel = Just "Filter Phase"
+                                         , title = Just "Phase Plot"
+                                         , horizontalTickRepresentation = ticksWithPhase
+                                         })
