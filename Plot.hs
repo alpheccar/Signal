@@ -33,6 +33,7 @@ module Plot(
     , ticksWithPhase
     , plotSignals
     , plotSpectrum
+    , withNewStyle
     ) where 
 
 import Graphics.PDF
@@ -65,6 +66,9 @@ maximumPoints = 800
 -- | A list fo signals wth style information for the plot and the signals
 -- The signals are using the same units
 data StyledSignal a b = StyledSignal Bool [a] [[b]] (PlotStyle a b)
+
+withNewStyle :: StyledSignal a b -> (PlotStyle a b -> PlotStyle a b) -> StyledSignal a b 
+withNewStyle (StyledSignal b t s style) f = StyledSignal b t s (f style)
 
 -- | Style for a signal (only color used in this version)
 data SignalStyle = SignalStyle {
@@ -573,10 +577,11 @@ data Resource = R { plotPixmap :: Maybe  (PDFReference RawImage)
 -- | A plot description is Displayable
 instance (Show b, Show a, Ord a, Ord b, HasDoubleRepresentation a, HasDoubleRepresentation b) =>  Displayable (StyledSignal a b) Resource where 
     drawing (StyledSignal complex theTimes signals s) = 
-        let (ta,tb) = maybe ( minimum . map toDouble $ theTimes 
-                            , maximum . map toDouble $ theTimes) id (horizontalBounds s)
-            (ya,yb) = maybe ( minimum . map (minimum . map toDouble ) $ signals 
-                            , maximum . map (maximum . map toDouble ) $ signals) id (verticalBounds s) 
+        let notInf = not . isInfinite
+            (ta,tb) = maybe ( minimum . filter notInf . map toDouble $ theTimes 
+                            , maximum . filter notInf . map toDouble $ theTimes) id (horizontalBounds s)
+            (ya,yb) = maybe ( minimum . map (minimum . filter notInf . map toDouble ) $ signals 
+                            , maximum . map (maximum . filter notInf . map toDouble ) $ signals) id (verticalBounds s) 
             timed = map (zip theTimes)
             action myRsrc wi hi = do
               let width = fromIntegral wi 

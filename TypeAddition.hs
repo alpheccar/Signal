@@ -22,6 +22,12 @@ type instance (15 :: Nat) + (14 :: Nat)  = 29
 type instance (15 :: Nat) + (15 :: Nat)  = 30
 type instance (15 :: Nat) + (16 :: Nat)  = 31
 
+type instance (1 :: Nat) + (1 :: Nat) = 2
+type instance (2 :: Nat) + (2 :: Nat) = 4
+type instance (3 :: Nat) + (3 :: Nat) = 6
+type instance (4 :: Nat) + (4 :: Nat) = 8
+type instance (5 :: Nat) + (5 :: Nat) = 10
+type instance (6 :: Nat) + (6 :: Nat) = 12
 type instance (7 :: Nat) + (7 :: Nat) = 14
 type instance (8 :: Nat) + (8 :: Nat) = 16
 type instance (9 :: Nat) + (9 :: Nat) = 18
