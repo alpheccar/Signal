@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
-module Transform(
+module Signal.Transform(
       --spectrum 
       spectrum
     , testFFT
@@ -31,13 +31,15 @@ import Control.Monad(forM_,foldM_,when)
 import Data.Word
 import Data.Int
 import Data.Bits
-import Fixed
-import Common(Time(..),Frequency(..))
-import Windows 
-import Signal 
-import GHC.TypeLits
 import Foreign.C.Types
-import TypeAddition
+
+import Signal
+import Signal.Fixed
+import Signal.Common(Time(..),Frequency(..))
+import Signal.Windows
+import GHC.TypeLits
+import Signal.TypeAddition
+import Data.Singletons
 
 --import Debug.Trace
 
@@ -140,14 +142,14 @@ _fft n sign vect = do
         -- Then butterfly 2 for all blocks
         foldM_ forAllBlocks (1 :+ 0) (filter (< step) [0,1..step])
 
-mac ::  (SingI n, SingI r, SingI (15 + n)) 
+mac ::  (SingI n, SingI r, SingI (15 + n), KnownNat n, KnownNat (15 + n))
     => Complex (Fixed Int16 15 Sat r)
     -> Complex (Fixed Int16 n Sat r) 
     -> Complex (Fixed Int16 n Sat r) 
     -> Complex (Fixed Int32 (15 + n) Sat r)
 mac w y x = fmap convert x + amulc w y
 
-msb ::  (SingI n, SingI r, SingI (15 + n)) 
+msb ::  (SingI n, SingI r, SingI (15 + n), KnownNat n, KnownNat (15 + n))
     => Complex (Fixed Int16 15 Sat r)
     -> Complex (Fixed Int16 n Sat r) 
     -> Complex (Fixed Int16 n Sat r) 
@@ -155,7 +157,7 @@ msb ::  (SingI n, SingI r, SingI (15 + n))
 msb w y x = fmap convert x - amulc w y
 
 
-_fftFixed :: (SingI n, SingI r, SingI (15 + n)) 
+_fftFixed :: (SingI n, SingI r, SingI (15 + n), KnownNat n,  KnownNat (15 + n))
           => Int -- ^ Power of 2
           -> Int
           -> M.MVector s (Complex (Fixed Int16 n Sat r)) 
@@ -218,7 +220,7 @@ class FFT a where
 
 instance FFT Double 
 
-instance (SingI n, SingI r, SingI (15 + n)) => FFT (Fixed Int16 n Sat r) where
+instance (SingI n, SingI r, SingI (15 + n), KnownNat n, KnownNat (15 + n)) => FFT (Fixed Int16 n Sat r) where
     fft = genericfft False _fftFixed
     ifft = genericfft True _fftFixed
 

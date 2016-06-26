@@ -1,11 +1,11 @@
-module MultiRate(
-	  decimateS
-	, interpolateS
-	) where 
+module Signal.MultiRate(
+          decimateS
+        , interpolateS
+        ) where
 
 import Signal 
-import Internal 
-import Data.List.Stream
+import Signal.Internal
+import Data.List.Stream (drop, replicate, (++))
 import Prelude hiding(drop, replicate, (++),(:))
 
 decimateS :: Int -> Signal a -> Signal a 

@@ -3,7 +3,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE BangPatterns #-}
-module Trace(
+module Signal.Trace(
       clearTrace
     , traceNames
     , CanBeTraced
@@ -13,24 +13,26 @@ module Trace(
     , forceSignal
     ) where 
 
-import Common(HasDoubleRepresentation(..))
 import System.IO.Unsafe
 import qualified Data.Map as M
 import Data.IORef
 import Control.Applicative((<$>))
-import Signal(Signal,mapS,fromListS,takeS)
-import Fixed(Resolution(..))
-import Statistics.Sample.KernelDensity 
-import qualified Data.Vector.Unboxed as U 
-import Viewer
-import Plot
-import Graphics.PDF
-import Displayable
-import Internal
+import qualified Data.Vector.Unboxed as U
+
 import Control.DeepSeq
 import Text.Printf
+import Graphics.PDF
 import qualified Graphics.PDF as PDF
+import Statistics.Sample.KernelDensity
 
+import HaskellViewer.Displayable
+import HaskellViewer.Viewer
+
+import Signal(Signal,mapS,fromListS,takeS)
+import Signal.Common(HasDoubleRepresentation(..))
+import Signal.Internal
+import Signal.Plot
+import Signal.Fixed(Resolution(..))
 
 import qualified Debug.Trace as T
 debug a = T.trace (show a) a

@@ -1,12 +1,12 @@
 {-# LANGUAGE DataKinds #-}
-module TestCases(
-	runTests
-	) where 
+module Signal.TestCases(
+        runTests
+        ) where
 
 import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit.Base
-import SpecialInt
+import Signal.SpecialInt
 
 import Data.Bits
 import Data.Word

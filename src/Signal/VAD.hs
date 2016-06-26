@@ -5,7 +5,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
-module VAD(
+module Signal.VAD(
       vad
     ) where 
 
@@ -14,20 +14,23 @@ module VAD(
 --
 
 import Prelude hiding(splitAt,(:),foldr1,tail,(++))
-import Internal
-import Signal 
 import qualified Data.Vector.Unboxed as U
 import Data.Vector.Unboxed((!),Unbox(..))
-import Data.List.Stream
-import Common 
-import Windows
-import Data.Complex 
-import Transform
-import qualified Trace as F
-import Fixed
+import Data.List.Stream(tail, foldr1, foldl1', splitAt, (++))
+import Data.Complex
+
 import GHC.TypeLits
-import SpecialInt 
-import Data.Int 
+import Data.Int
+
+import Signal
+import Signal.Common
+import Signal.Fixed
+import Signal.Internal
+import Signal.SpecialInt
+import qualified Signal.Trace as F
+import Signal.Transform
+import Signal.Windows
+import Data.Singletons
 
 ltseF :: Sample a  
       => Int 
@@ -53,7 +56,7 @@ lstdD winSize noiseEnergy lste =
         in
         10 * log(U.sum (U.zipWith (d) lste noiseEnergy) / fromIntegral winSize) / log 10
 
-theTotal :: (SingI r, SingI s, SingI n)
+theTotal :: (SingI r, SingI s, SingI n, KnownNat n)
          => Fixed Int32 n s r 
          -> U.Vector (Fixed Int32 n s r) 
          -> U.Vector (Fixed Int32 n s r) 
@@ -65,14 +68,14 @@ theTotal m lste noiseEnergy =
            U.sum (U.zipWith (d) lste noiseEnergy)
 {-# INLINE [0] theTotal #-}
 
-lstdF :: (SingI n, SingI s, SingI r)  
+lstdF :: (SingI n, SingI s, SingI r, KnownNat n)
       => Int 
       -> U.Vector (Fixed Int32 n s r)
       -> U.Vector (Fixed Int32 n s r)
       -> (Fixed Int32 n s r)
 lstdF winSize noiseEnergy lste = 10 * log(convert $ theTotal maxBound lste noiseEnergy/ fromIntegral winSize) / log 10
 
-getDecisionF :: (SingI n, SingI s, SingI r, SingI (n + n)) 
+getDecisionF :: (SingI n, SingI s, SingI r, SingI (n + n), KnownNat n, KnownNat (n + n))
              => Int 
              -> U.Vector (Fixed Int32 (n + n) s r) 
              -> [(U.Vector (Fixed Int32 (n + n) s r), U.Vector (Fixed Int32 (n + n) s r) )] 
@@ -106,7 +109,7 @@ getDecisionD winSize energy [] = 0:getDecisionD winSize energy []
 bandEnergy :: Complex Double -> Double
 bandEnergy (x :+ y) = x*x + y*y 
 
-bandEnergyF :: (SingI n, SingI s, SingI r, SingI (n + n)) => Complex (Fixed Int16 n s r) -> Fixed Int32 (n + n) s r
+bandEnergyF :: (SingI n, SingI s, SingI r, SingI (n + n), KnownNat (n + n)) => Complex (Fixed Int16 n s r) -> Fixed Int32 (n + n) s r
 bandEnergyF (x :+ y) = amul x x + amul y y
 
 class VAD a where 
@@ -114,7 +117,7 @@ class VAD a where
         => Sampled Time a
         -> Sampled Time a
 
-instance (SingI n, SingI s, SingI r, SingI (n + n)) => VAD (Fixed Int16 n s r) where 
+instance (SingI n, SingI s, SingI r, KnownNat n, SingI (n + n), KnownNat (n+n)) => VAD (Fixed Int16 n s r) where
     vad s = 
         let winSize = 256 
             overlap = 20

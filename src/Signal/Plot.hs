@@ -7,7 +7,7 @@
 {- | Example implementation for displaying signals
 
 -}
-module Plot(
+module Signal.Plot(
       StyledSignal
     , SignalStyle(..) 
     , PlotStyle(..)
@@ -37,26 +37,31 @@ module Plot(
     ) where 
 
 import Graphics.PDF
-import Displayable 
-import Viewer
+import Graphics.PDF.Image
+
+import HaskellViewer.Displayable
+import HaskellViewer.Viewer
+
 import Text.Printf
 import qualified Graphics.PDF as PDF(Orientation(..))
 import Control.Monad(when) 
 import Data.Maybe(isJust,fromJust)
-import Signal
-import Fixed(HasDoubleRepresentation(..))
-import MultiRate
 import Control.Monad.State.Strict
-import qualified Data.Vector.Unboxed.Mutable as M 
-import qualified Data.Vector.Unboxed as U 
-import Control.Monad.ST 
+import qualified Data.Vector.Unboxed.Mutable as M
+import qualified Data.Vector.Unboxed as U
+import Control.Monad.ST
 import Control.Monad.Primitive
 import Data.Word
 import Data.Bits
 import Data.List(sortBy,unfoldr,sort)
 import Data.Function(on)
 import Data.STRef
-import Common
+
+import Signal
+import Signal.Common
+import Signal.MultiRate
+import Signal.Fixed(HasDoubleRepresentation(..))
+
 
 import Debug.Trace
 debug a = trace (show a) a
@@ -465,11 +470,14 @@ data PState   =          PState {  currentColor :: !Color
                                  , pixels :: forall s. ST s (STRef s (M.MVector s Word32)) 
                                  } 
 
-data Pixmap  a = Pixmap {getPixmap :: State (PState ) a} 
+data Pixmap  a = Pixmap {getPixmap :: State (PState ) a}
 
-instance Monad (Pixmap )  where 
-    return = Pixmap . return 
-    (Pixmap a) >>= f = Pixmap (a >>= getPixmap . f) 
+instance Applicative Pixmap where
+instance Functor Pixmap where
+
+instance Monad (Pixmap )  where
+    return = Pixmap . return
+    (Pixmap a) >>= f = Pixmap (a >>= getPixmap . f)
 
 instance MonadState (PState ) (Pixmap ) where 
     get = Pixmap get 
@@ -506,7 +514,7 @@ runPixmap width height p =
            mv <- readSTRef refmv
            U.freeze mv
     in 
-    createPDFRawImage (fromIntegral width) (fromIntegral height) False $ (result finalState)
+    createPDFRawImageFromARGB (fromIntegral width) (fromIntegral height) False $ (result finalState)
 
 segmentedDraw :: Canvas c 
               => ((a,b) -> Point) 

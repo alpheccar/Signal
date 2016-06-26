@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Signal(
-	Signal,
+        Signal,
     BSignal, 
     getSamples,
     duration,
@@ -11,7 +11,7 @@ module Signal(
     Sample(..),
     DualVal(..),
     samplingRate,
-	   -- * Basic interface
+           -- * Basic interface
     headS,                   
     tailS, 
     consS,  
@@ -105,20 +105,24 @@ module Signal(
     Sampled(..),
     HasPeriod(..),
     HasSamples(..)
-	) where 
+        ) where
 
 import qualified Prelude as P
 import Prelude(Int(..),Maybe(..),Bool(..),Eq(..),Integral(..),($),(.),Num(..),Ord(..),Show
               ,otherwise,Floating,Fractional,Real,Read,RealFloat,RealFrac)
-import Internal
+
 import qualified Data.Vector.Unboxed as U
 import Data.Vector.Unboxed((!),Unbox(..))
+
 import Data.Stream(stream,unstream,Stream(..),Step(..),L(..))
 import Data.List.Stream
-import Common(HasDoubleRepresentation(..))
-import Playable
-import Common 
-import Viewer(play)
+
+import HaskellViewer.Playable
+import HaskellViewer.Viewer(play)
+
+import Signal.Common
+import Signal.Common(HasDoubleRepresentation(..))
+import Signal.Internal
 
 type Sample a = (RealFrac a, RealFloat a, HasDoubleRepresentation a, Unbox a)
 

@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-module Noise(
+module Signal.Noise(
       histogram
     , Structure(..)
     , quantizationNoise
@@ -9,13 +9,15 @@ module Noise(
 
 import qualified Statistics.Sample.Histogram as H
 import qualified Data.Vector.Unboxed as U
-import Plot 
+
 import Graphics.PDF 
-import Common 
-import Generators
-import Signal 
-import System.Random 
+import System.Random
 import Text.Printf 
+
+import Signal
+import Signal.Plot
+import Signal.Common
+import Signal.Generators
 
 nbBins = 20 
 
