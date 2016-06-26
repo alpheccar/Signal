@@ -1,0 +1,23 @@
+resolver: lts-6.4
+packages:
+
+- .
+#- ../stream-fusion
+- location:
+    git: git@github.com:tolysz/stream-fusion.git
+    commit: e0bb1f7164ab03f936198fb69c395493572f030c
+#- ../HaskellViewer
+- location:
+    git: git@github.com:tolysz/HaskellViewer.git
+    commit: 4b951aaeb3bf8a322c634154aedc898b4d8a1285
+
+extra-deps:
+- WAVE-0.1.3
+- polynomial-0.7.2
+
+allow-newer: true
+
+flags: {}
+
+extra-package-dbs: []
+
