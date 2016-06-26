@@ -322,9 +322,9 @@ genericReplicateS n x = Signal (genericReplicate n x)
 fromVectorS :: Unbox a => a -> U.Vector a -> Signal a
 fromVectorS d v = Signal $ unstream (repeatVector d)
  where 
- 	repeatVector d = Stream (nextS d) (L 0)
- 	nextS d l@(L !i) | i < U.length v = Yield (v!i) (L (i+1))
- 	                 | otherwise = Yield d l
+        repeatVector d = Stream (nextS d) (L 0)
+        nextS d l@(L !i) | i < U.length v = Yield (v!i) (L (i+1))
+                         | otherwise = Yield d l
 {-# INLINE [0] fromVectorS #-}
 
 fromVectorBS :: Unbox a => U.Vector a -> BSignal a 

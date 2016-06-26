@@ -133,18 +133,27 @@ wav = do
   let theTimes = uniformSamples (period s) 0.0
   display $ plotSignals (floor $ 2.0 * getF (rate s))  (period s) [ AS s]
 
+avad = do
+  s <- readMono "Test.wav" :: IO (Sampled Time Double)
+  let v = vad s
+  let theTimes = uniformSamples (period s) 0.0
+  display $ plotSignals (floor $ 2.0 * getF (rate s))  (period s) [ AS s, AS v]
+
+
 myTest = do
-  s <- readMono "Test.wav" :: IO (Signal Time Double)
+  s <- readMono "Test.wav" :: IO (Sampled Time Double)
   let tr = dual (Frequency 44100)
+--       theTimes = {-# SCC "theTimes" #-} uniformSamples s 0.0 :: Signal Time
       theTimes = {-# SCC "theTimes" #-} uniformSamples tr 0.0 :: Signal Time
       --s = mapS (\t -> 0.01*sin (2*pi*4000*getT t)) theTimes
       si = vad s
 --       sv = tr
       sv = si
-      ----theFrames = uniformSamples sv 0
+--       theFrames = uniformSamples sv 0
       --myLen !s (!a:l) = myLen (s+1) l
       --myLen !s [] = s
-  display $ discreteSignalsWithStyle (floor $ 6.0 / getT sv)  plotStyle { horizontalBounds = Just (0,6.0)
+--   display $ discreteSignalsWithStyle (floor $ 6.0 / getT sv)  plotStyle { horizontalBounds = Just (0,6.0)
+  display $ discreteSignalsWithStyle (floor $ 6.0 /  samplingPeriod s)  plotStyle { horizontalBounds = Just (0,6.0)
                                                                         , verticalBounds = Just (0,6.0)
                                                                         }
                 [ AS theTimes]

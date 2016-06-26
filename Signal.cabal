@@ -40,7 +40,6 @@ library
     Signal.Noise
     Signal.Filter
   other-modules:
-    Signal.TypeAddition
     Signal.Internal
   build-depends:       
      base,

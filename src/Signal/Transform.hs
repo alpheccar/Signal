@@ -38,7 +38,6 @@ import Signal.Fixed
 import Signal.Common(Time(..),Frequency(..))
 import Signal.Windows
 import GHC.TypeLits
-import Signal.TypeAddition
 import Data.Singletons
 
 --import Debug.Trace
