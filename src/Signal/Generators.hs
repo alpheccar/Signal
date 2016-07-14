@@ -1,14 +1,13 @@
 {-# LANGUAGE BangPatterns #-}
-module Generators(
-	  uniformSamples
-	, randomSamples
-	) where 
+module Signal.Generators(
+          uniformSamples
+        , randomSamples
+        ) where
 
 import Prelude hiding(unfoldr)
-import Common
-import Internal
-import System.Random 
-import Data.List.Stream
+import System.Random
+import Signal.Common
+import Signal.Internal
 
 uniformSamples :: Num a  
                => a -- ^ Sampling period 
@@ -24,6 +23,6 @@ randomSamples :: (Random a)
               -> a 
               -> IO (Signal a)
 randomSamples mi ma = do 
-	g <- newStdGen 
-	let l = randomRs (mi,ma) g
-	return $ Signal l
+        g <- newStdGen
+        let l = randomRs (mi,ma) g
+        return $ Signal l

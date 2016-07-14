@@ -5,7 +5,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-module SpecialInt(
+module Signal.SpecialInt(
       SuperInt(..)
     , NumberInfo(..)
     , BaseValue(..)

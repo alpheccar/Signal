@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Signal(
-	Signal,
+        Signal,
     BSignal, 
     getSamples,
     duration,
@@ -11,7 +11,7 @@ module Signal(
     Sample(..),
     DualVal(..),
     samplingRate,
-	   -- * Basic interface
+           -- * Basic interface
     headS,                   
     tailS, 
     consS,  
@@ -105,20 +105,24 @@ module Signal(
     Sampled(..),
     HasPeriod(..),
     HasSamples(..)
-	) where 
+        ) where
 
 import qualified Prelude as P
 import Prelude(Int(..),Maybe(..),Bool(..),Eq(..),Integral(..),($),(.),Num(..),Ord(..),Show
               ,otherwise,Floating,Fractional,Real,Read,RealFloat,RealFrac)
-import Internal
+
 import qualified Data.Vector.Unboxed as U
 import Data.Vector.Unboxed((!),Unbox(..))
+
 import Data.Stream(stream,unstream,Stream(..),Step(..),L(..))
 import Data.List.Stream
-import Common(HasDoubleRepresentation(..))
-import Playable
-import Common 
-import Viewer(play)
+
+import HaskellViewer.Playable
+import HaskellViewer.Viewer(play)
+
+import Signal.Common
+import Signal.Common(HasDoubleRepresentation(..))
+import Signal.Internal
 
 type Sample a = (RealFrac a, RealFloat a, HasDoubleRepresentation a, Unbox a)
 
@@ -318,9 +322,9 @@ genericReplicateS n x = Signal (genericReplicate n x)
 fromVectorS :: Unbox a => a -> U.Vector a -> Signal a
 fromVectorS d v = Signal $ unstream (repeatVector d)
  where 
- 	repeatVector d = Stream (nextS d) (L 0)
- 	nextS d l@(L !i) | i < U.length v = Yield (v!i) (L (i+1))
- 	                 | otherwise = Yield d l
+        repeatVector d = Stream (nextS d) (L 0)
+        nextS d l@(L !i) | i < U.length v = Yield (v!i) (L (i+1))
+                         | otherwise = Yield d l
 {-# INLINE [0] fromVectorS #-}
 
 fromVectorBS :: Unbox a => U.Vector a -> BSignal a 

@@ -1,12 +1,13 @@
 {-# LANGUAGE TypeOperators,TypeFamilies,MultiParamTypeClasses,FlexibleContexts, BangPatterns,PolyKinds, DataKinds, GADTs, GeneralizedNewtypeDeriving,DeriveDataTypeable,FlexibleInstances,ScopedTypeVariables #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{- | Fixed point arithmetic 
+{-# LANGUAGE CPP, TemplateHaskell #-}
+{-# LANGUAGE DataKinds, PolyKinds, TypeOperators, TypeFamilies, GADTs, UndecidableInstances, FlexibleContexts, KindSignatures #-}
+{- | Fixed point arithmetic
 
 Fixed point arithmetic with signed, unsigned and saturation
 
 -}
-module Fixed(
+module Signal.Fixed(
       nbFractionalBits
     , HasDoubleRepresentation(..)
     , FixedPoint(..)
@@ -44,11 +45,17 @@ import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as M
 import Control.Monad(liftM)
-import Common(HasDoubleRepresentation(..))
 import Data.Complex
-import SpecialInt 
+
+import Data.Singletons.TH (singletons)
+import Data.Proxy (KProxy(..))
+import Data.Singletons.Prelude
+
 import Control.DeepSeq
 import System.Random
+
+import Signal.SpecialInt
+import Signal.Common(HasDoubleRepresentation(..))
 
 import Debug.Trace
 
@@ -66,31 +73,34 @@ instance HasDoubleRepresentation Int where
     toDouble = fromIntegral
     fromDouble = floor
 
+$(singletons [d|
+  data Saturation = Sat | Unsat deriving(Eq)
+  data Rounding = RO | NR  deriving(Eq)
+  |])
 newtype Fixed :: * -> Nat -> Saturation -> Rounding -> * where Fixed :: a -> Fixed a n sa r
 
-data Saturation = Sat | Unsat deriving(Eq)
-data Rounding = RO | NR  deriving(Eq)
+-- newtype instance Sing (n :: Saturation) = SatC Saturation
+-- newtype instance Sing (n :: Rounding) = RoundC Rounding
 
-newtype instance Sing (n :: Saturation) = SatC Saturation
-newtype instance Sing (n :: Rounding) = RoundC Rounding
-
-instance SingI Sat where 
-  sing = SatC Sat
-
-instance SingI Unsat where 
-  sing = SatC Unsat
-
-instance SingE (Kind :: Saturation) Saturation where
-  fromSing (SatC n) = n
-
-instance SingI RO where 
-  sing = RoundC RO
-
-instance SingI NR where 
-  sing = RoundC NR
-
-instance SingE (Kind :: Rounding) Rounding where
-  fromSing (RoundC n) = n
+-- instance SingI Sat where
+--   sing = SatC Sat
+--
+-- instance SingI Unsat where
+--   sing = SatC Unsat
+--
+-- instance SingKind  Saturation where
+--   type DemoteRep = Saturation
+--   fromSing (SatC n) = n
+--
+-- instance SingI RO where
+--   sing = RoundC RO
+--
+-- instance SingI NR where
+--   sing = RoundC NR
+--
+-- instance SingKind (KindOf Rounding) where
+--   type DemoteRep = Rounding
+--   fromSing (RoundC n) = n
 
 newtype instance U.MVector s (Fixed a n sat r)  = MVFixed (U.MVector s a)
 newtype instance U.Vector    (Fixed a n sat r) = VFixed (U.Vector a)
@@ -350,7 +360,7 @@ instance NFData (Fixed INT n s r) where {\
 instance (SingI n, SingI s, SingI r) => Random (Fixed INT n s r) where {\
     randomR = genericRandomR \
 ;   random = genericRandom }; \
-instance (SingI n, SingI s, SingI r) => Num (Fixed INT n s r) where {\
+instance (SingI n, SingI s, SingI r, KnownNat n) => Num (Fixed INT n s r) where {\
      (+) = genericOperator (+) \
 ;    (-) = genericOperator (-) \
 ;    abs = genericAbs \
@@ -360,7 +370,7 @@ instance (SingI n, SingI s, SingI r) => Num (Fixed INT n s r) where {\
 instance (SingI n, SingI s, SingI r) => Bounded (Fixed INT n s r) where {\
      maxBound = fromRawValue maxBound \
 ;    minBound = fromRawValue minBound };\
-instance (SingI n, SingI s, SingI r) => Resolution (Fixed INT n s r) where {\
+instance (SingI n, SingI s, SingI r, KnownNat n) => Resolution (Fixed INT n s r) where {\
      smallestValue _ = fromRawValue 1 \
 ;    maxValue _ = maxBound \
 ;    minValue _ = minBound \
@@ -369,17 +379,17 @@ instance (SingI n, SingI s, SingI r) => Resolution (Fixed INT n s r) where {\
 instance FixedPoint INT where {\
      fromRawValue = Fixed \
 ;    toRawValue (Fixed a) = a}; \
-instance (SingI n, SingI s) => HasDoubleRepresentation (Fixed INT n s r) where {\
+instance (SingI n, SingI s, KnownNat n) => HasDoubleRepresentation (Fixed INT n s r) where {\
    toDouble = genericToDouble \
 ;  fromDouble = genericFromDouble}; \
-instance (SingI n, SingI s, SingI r) => Fractional (Fixed INT n s r) where {\
+instance (SingI n, SingI s, SingI r, KnownNat n) => Fractional (Fixed INT n s r) where {\
     (/)  = genericDiv \
 ;   fromRational = genericFromRational}; \
-instance (SingI n,SingI s, SingI r) => Real (Fixed INT n s r) where {\
+instance (SingI n,SingI s, SingI r, KnownNat n) => Real (Fixed INT n s r) where {\
   toRational = toRational . toDouble }; \
-instance (SingI n, SingI s, SingI r) => RealFrac (Fixed INT n s r) where {\
+instance (SingI n, SingI s, SingI r, KnownNat n) => RealFrac (Fixed INT n s r) where {\
   properFraction = genericProperFraction }; \
-instance (SingI n, SingI s, SingI r) => Floating (Fixed INT n s r) where {\
+instance (SingI n, SingI s, SingI r, KnownNat n) => Floating (Fixed INT n s r) where {\
     pi = fromDouble pi \
 ;   exp = fromDouble . exp . toDouble \
 ;   log = fromDouble . log . toDouble \
@@ -393,7 +403,7 @@ instance (SingI n, SingI s, SingI r) => Floating (Fixed INT n s r) where {\
 ;   asinh = fromDouble . asinh . toDouble \
 ;   acosh = fromDouble . acosh . toDouble \
 ;   atanh = fromDouble . atanh . toDouble}; \
-instance (SingI n, SingI s, SingI r) => RealFloat (Fixed INT n s r) where {\
+instance (SingI n, SingI s, SingI r, KnownNat n) => RealFloat (Fixed INT n s r) where {\
    isInfinite = error ("RealFloat has no meaning for a fixed point number and is needed only because of Complex") \
 ;  isDenormalized = error ("RealFloat has no meaning for a fixed point number and is needed only because of Complex") \
 ;  isNegativeZero = error ("RealFloat has no meaning for a fixed point number and is needed only because of Complex") \

@@ -1,20 +1,23 @@
 {-# LANGUAGE ConstraintKinds #-}
-module Spectrogram(
+module Signal.Spectrogram(
      spectrogram
     ) where 
 
-import Signal 
-import Windows
 import qualified Data.Vector.Unboxed as U
 import Data.Vector.Unboxed((!))
 import Data.Complex
 import Data.Bits
-import Common
-import Transform
 import Graphics.PDF
-import Plot
+
 import Control.Applicative((<$>))
 import Data.List(foldl1')
+
+import Signal
+import Signal.Common
+import Signal.Plot
+import Signal.Transform
+import Signal.Windows
+
 
 import Debug.Trace 
 
@@ -37,7 +40,7 @@ _spectrum n t d =
     U.map m . fft  $ complexd
 
 prologSpect l b wi hi Nothing _ = return () 
-prologSpect l b wi hi (Just r) _ = do
+prologSpect l b wi hi (Just r) _ =
     withNewContext $ do
         applyMatrix $ translate (l :+ b)
         drawXObject r
@@ -47,17 +50,18 @@ genPicture :: ((Double, Double) -> Double)
            -> Int 
            -> CoordinateMapping Double Double
            -> PDF (Maybe (PDFReference RawImage))
-genPicture value w h (plotToPixel, pixelToPlot) = Just <$> do
-    runPixmap w h $ do
-        let drawValue p = do
-            let pl = pixelToPlot p
-                v = log (1 + value pl) / log 2.0 
-                col = Rgb v 0 0
-            setColor col 1.0 
-            pixel p
-        
-        mapM_ drawValue ( [ fromIntegral col :+ fromIntegral row | col <- [0..w-1], row <- [0..h-1]])
-                                       
+genPicture value w h (plotToPixel, pixelToPlot) = Just <$>
+  (runPixmap w h $
+    mapM_ drawValue [ fromIntegral col :+ fromIntegral row | col <- [0..w-1], row <- [0..h-1]])
+   where
+    drawValue p = do
+        let pl = pixelToPlot p
+            v = log (1 + value pl) / log 2.0
+            col = Rgb v 0 0
+        setColor col 1.0
+        pixel p
+
+
 -- We display only up to sampling frequency / 2 because the spectrum is even.
 -- So, it allow a zooming a the frequency that matters instead of displaying redudant information
 spectrogram :: (Sample a, Show a) 

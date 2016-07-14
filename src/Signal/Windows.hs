@@ -1,5 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
-module Windows(
+module Signal.Windows(
       hann
     , noWindow
     , hamming
@@ -13,10 +13,10 @@ module Windows(
     ) where 
 
 import Prelude hiding(splitAt,(++),concat,zipWith,concatMap,null,head,take)
-import Common
+import Signal.Common
 import Signal
-import Internal
-import Data.List.Stream
+import Signal.Internal
+import Data.List.Stream (take, null)
 import qualified Data.Vector.Unboxed as U
 import Data.Vector.Unboxed((!),Unbox(..))
 

@@ -3,30 +3,34 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeOperators #-}
-module Filter(
+{-# LANGUAGE AllowAmbiguousTypes #-}
+module Signal.Filter(
       FIR(..)
     , bode
     , phasePlot
     ) where 
 
-import Signal
-import Math.Polynomial 
-import Common 
-import Noise 
-import Fixed 
+import Math.Polynomial
 import GHC.TypeLits
-import SpecialInt
 import Data.Bits
-import Plot
+
 import Data.Complex
+import Data.Singletons
 import Text.Printf
+
+import Signal
+import Signal.Common
+import Signal.Noise
+import Signal.Fixed
+import Signal.Plot
+import Signal.SpecialInt
 
 import Debug.Trace
 
 debug a = trace (show a) a
-
+-- SingI (nc + ni), SingI nc, SingI ni, SingI no, SingI s, SingI r,
 data FIR p i o where 
- FIR :: (SingI (nc + ni), SingI nc, SingI ni, SingI no, SingI s, SingI r, HasDoubleRepresentation (Fixed a nc s r), Num (Fixed ag (nc + ni) s r), Num (Fixed a nc s r), Eq a, Conversion ag ao, ConvertConstraint ag ao, AMulConstraint a ag)
+ FIR :: (KnownNat no, KnownNat nc, KnownNat ni, KnownNat (nc + ni), SingI s, SingI r, HasDoubleRepresentation (Fixed a nc s r), Num (Fixed ag (nc + ni) s r), Num (Fixed a nc s r), Eq a, Conversion ag ao, ConvertConstraint ag ao, AMulConstraint a ag)
      => Poly (Fixed a nc s r) 
      -> FIR ((Fixed ag (nc + ni) s r),(Fixed a nc s r)) (Fixed a ni s r) (Fixed ao no s r)
  FIRD :: Poly Double 
@@ -36,7 +40,7 @@ polyRepresentation :: FIR p i o -> Poly Double
 polyRepresentation (FIRD p) = p 
 polyRepresentation (FIR f) = fmap toDouble f
 
-instance Show p => Show (FIR p i o) where 
+instance (Show p)=> Show (FIR p i o) where
   show (FIR c) = show c 
   show (FIRD d) = show d
 
@@ -55,8 +59,8 @@ filterDWith (a:l) s | null l = mapS (a*) s
                     | otherwise = zipWithS (+) (mapS (a*) s) (filterDWith l (delay 0 s)) 
 filterDWith [] s = s 
 
-
-_filterWith :: (AMulConstraint a ag, SingI (na + ni), SingI s, SingI r, SingI na, SingI ni, Num (Fixed a ni s r), Num (Fixed ag (na + ni) s r))
+-- , SingI (na + ni), SingI s, SingI r, SingI na, SingI ni
+_filterWith :: (KnownNat na, KnownNat ni, SingI s, AMulConstraint a ag, Num (Fixed a ni s r), Num (Fixed ag (na + ni) s r))
             => FIR ((Fixed ag ng s r),(Fixed a na s r)) (Fixed a ni s r) (Fixed ao no s r)
             -> [Fixed a na s r] 
             -> Signal (Fixed a ni s r) 
@@ -65,7 +69,8 @@ _filterWith f (a:l) s | null l = mapS (amul a) s
                       | otherwise = zipWithS (+) (mapS (amul a) s) (_filterWith f l (delay 0 s)) 
 _filterWith _ [] s = error "Empty polynomial can't be used for filtering"
 
-filterWith :: (Conversion ag ao, ConvertConstraint ag ao, Num (Fixed a ni s r), Num (Fixed ag (na + ni) s r), SingI r, SingI s, SingI (na + ni), SingI ni, SingI na, SingI no, AMulConstraint a ag) 
+-- SingI r, SingI s, SingI (na + ni), SingI ni, SingI na, SingI no,
+filterWith :: (KnownNat no, KnownNat na, KnownNat ni, KnownNat (na + ni),SingI s,SingI r , Conversion ag ao, ConvertConstraint ag ao, Num (Fixed a ni s r), Num (Fixed ag (na + ni) s r), AMulConstraint a ag)
            => FIR ((Fixed ag ng s r),(Fixed a na s r)) (Fixed a ni s r) (Fixed ao no s r) 
            -> [Fixed a na s r] 
            -> Signal (Fixed a ni s r) 

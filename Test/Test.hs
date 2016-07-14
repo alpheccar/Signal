@@ -3,37 +3,37 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GADTs #-}
 module Main(
-	  main
-	
-	) where 
+          main
+
+        ) where
 
 import Prelude hiding((++))
-import Plot
+import Signal.Plot
 import Graphics.PDF hiding(Orientation(..), Vertical)
-import Transform
+import Signal.Transform
 import Signal
-import Generators
-import Fixed
-import TestCases
-import Common 
-import Windows
+import Signal.Generators
+import Signal.Fixed
+import Signal.TestCases
+import Signal.Common
+import Signal.Windows
 import qualified Data.Vector.Unboxed as U
 import qualified Numeric.GSL.Fourier as F
-import Trace
+import Signal.Trace
 import System.Random 
-import Displayable
+import HaskellViewer.Displayable
 import Control.DeepSeq
 import Control.Applicative((<$>))
-import AudioFile 
-import Playable 
-import Viewer(play)
-import Spectrogram 
-import VAD
+import Signal.AudioFile
+import HaskellViewer.Playable
+import HaskellViewer.Viewer(play)
+import Signal.Spectrogram
+import Signal.VAD
 import Data.List.Stream((++))
 import System.Timeout
-import Noise
+import Signal.Noise
 import System.IO
-import Filter
+import Signal.Filter
 import Math.Polynomial 
 
 import qualified Debug.Trace as T
@@ -133,17 +133,27 @@ wav = do
   let theTimes = uniformSamples (period s) 0.0
   display $ plotSignals (floor $ 2.0 * getF (rate s))  (period s) [ AS s]
 
+avad = do
+  s <- readMono "Test.wav" :: IO (Sampled Time Double)
+  let v = vad s
+  let theTimes = uniformSamples (period s) 0.0
+  display $ plotSignals (floor $ 2.0 * getF (rate s))  (period s) [ AS s, AS v]
+
+
 myTest = do
-  --s <- readMono "Test.wav" :: IO (Signal Time Double)
+  s <- readMono "Test.wav" :: IO (Sampled Time Double)
   let tr = dual (Frequency 44100)
+--       theTimes = {-# SCC "theTimes" #-} uniformSamples s 0.0 :: Signal Time
       theTimes = {-# SCC "theTimes" #-} uniformSamples tr 0.0 :: Signal Time
       --s = mapS (\t -> 0.01*sin (2*pi*4000*getT t)) theTimes
-      --si = vad s
-      sv = tr
-      ----theFrames = uniformSamples sv 0
+      si = vad s
+--       sv = tr
+      sv = si
+--       theFrames = uniformSamples sv 0
       --myLen !s (!a:l) = myLen (s+1) l
       --myLen !s [] = s
-  display $ discreteSignalsWithStyle (floor $ 6.0 / getT sv)  plotStyle { horizontalBounds = Just (0,6.0)
+--   display $ discreteSignalsWithStyle (floor $ 6.0 / getT sv)  plotStyle { horizontalBounds = Just (0,6.0)
+  display $ discreteSignalsWithStyle (floor $ 6.0 /  samplingPeriod s)  plotStyle { horizontalBounds = Just (0,6.0)
                                                                         , verticalBounds = Just (0,6.0)
                                                                         }
                 [ AS theTimes]
@@ -254,22 +264,22 @@ lightGreen = Rgb 0.6 1.0 0.6
 lightYellow = Rgb 1.0 1.0 0.6
 
 plotStyle =  
-	(defaultPlotStyle { title = Just "Temporal"
-        	          , signalStyles = [ defaultSignalStyle 0.8 lightBlue
-        	                           , defaultSignalStyle 0.8 lightRed
-        	                           , defaultSignalStyle 0.8 lightGreen
+        (defaultPlotStyle { title = Just "Temporal"
+                          , signalStyles = [ defaultSignalStyle 0.8 lightBlue
+                                           , defaultSignalStyle 0.8 lightRed
+                                           , defaultSignalStyle 0.8 lightGreen
                                      , defaultSignalStyle 0.8 lightYellow
-        	                           ]
-        	          , verticalLabel = Just "Amplitude"
-        	          })  
+                                           ]
+                          , verticalLabel = Just "Amplitude"
+                          })
 fftStyle = 
-	plotStyle { verticalLabel = Just "Energy", title = Just "Frequential", horizontalLabel = Just "Hz"
+        plotStyle { verticalLabel = Just "Energy", title = Just "Frequential", horizontalLabel = Just "Hz"
                      , signalStyles = [ defaultSignalStyle 0.8 lightBlue
-        	                            , defaultSignalStyle 0.8 lightRed
-        	                            , defaultSignalStyle 0.8 lightGreen
+                                            , defaultSignalStyle 0.8 lightRed
+                                            , defaultSignalStyle 0.8 lightGreen
                                       , defaultSignalStyle 0.8 lightYellow
-        	                          ]
-        	         }
+                                          ]
+                         }
 
 pict = display $ plotSignals (floor $ getT dr * getF samplingFrequency) sp [ AS mySignalA
                                                                            , AS mySignalC
